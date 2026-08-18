@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.common import ensure_project_dirs, load_config, set_seed, utc_now, write_json
+from src.data import ensure_nemo_audio_cache
 from src.nemo_utils import attach_manifests, configure_trainable_layers, import_nemo, load_pretrained_ctc_model, set_learning_rate
 
 
@@ -54,7 +55,7 @@ def run(config_path: str | Path, manifest_path: str | Path) -> dict[str, Any]:
     set_seed(int(config["project"]["seed"]))
     paths = ensure_project_dirs(config)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    local_manifests = _manifest_paths(paths["nemo"])
+    local_manifests = ensure_nemo_audio_cache(config, manifest, Path(config["_project_root"]))
 
     model = load_pretrained_ctc_model(config["model"]["pretrained_name"])
     attach_manifests(model, local_manifests["train"], local_manifests["validation"], local_manifests["test"], config)

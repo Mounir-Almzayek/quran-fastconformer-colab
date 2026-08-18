@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from src.common import ensure_project_dirs, load_config, set_seed, utc_now, write_json
-from src.data import load_nemo_manifest
+from src.data import ensure_nemo_audio_cache, load_nemo_manifest
 from src.metrics import build_metrics, save_predictions
 from src.nemo_utils import load_pretrained_ctc_model, normalize_transcriptions
 
@@ -29,9 +29,8 @@ def run(config_path: str | Path, manifest_path: str | Path) -> dict[str, Any]:
     paths = ensure_project_dirs(config)
     import json
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    test_manifest = paths["nemo"] / "manifests" / "test.jsonl"
-    if not test_manifest.exists():
-        raise FileNotFoundError("NeMo test manifest is missing. Run run_colab_setup.py --materialize first.")
+    local_manifests = ensure_nemo_audio_cache(config, manifest, Path(config["_project_root"]))
+    test_manifest = local_manifests["test"]
 
     model = load_pretrained_ctc_model(config["model"]["pretrained_name"])
     records = load_nemo_manifest(test_manifest)

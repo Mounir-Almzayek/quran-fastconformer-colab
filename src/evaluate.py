@@ -9,7 +9,7 @@ from typing import Any
 
 from src.baseline import _predict
 from src.common import ensure_project_dirs, load_config, set_seed, utc_now, write_json
-from src.data import load_nemo_manifest
+from src.data import ensure_nemo_audio_cache, load_nemo_manifest
 from src.metrics import build_metrics, save_predictions
 from src.nemo_utils import import_nemo, normalize_transcriptions
 
@@ -31,8 +31,8 @@ def run(config_path: str | Path, manifest_path: str | Path, model_path: str | Pa
     resolved_model = Path(model_path) if model_path else paths["model"]
     if not resolved_model.is_file():
         raise FileNotFoundError(f"Fine-tuned NeMo file not found: {resolved_model}")
-    test_manifest = paths["nemo"] / "manifests" / "test.jsonl"
-    records = load_nemo_manifest(test_manifest)
+    local_manifests = ensure_nemo_audio_cache(config, manifest, Path(config["_project_root"]))
+    records = load_nemo_manifest(local_manifests["test"])
     model = _restore_model(resolved_model)
     rows = _predict(model, records, int(config["training"]["validation_batch_size"]))
     metrics, normalized_rows = build_metrics(

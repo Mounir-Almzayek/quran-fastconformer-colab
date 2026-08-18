@@ -68,7 +68,7 @@ Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastco
 |---|---|---|
 | `01_setup` | Mounts Drive, installs NeMo, checks the schema, and creates the immutable disjoint-reciter manifest | `artifacts/manifests/experiment_manifest.json` |
 | `02_inspect_everyayah` | Inspects a few real streamed rows | Schema confirmation |
-| `03_prepare_nemo_manifests` | Downloads only the selected clips and creates local WAV/NeMo JSONL files | `artifacts/nemo/{audio,manifests}/` |
+| `03_prepare_nemo_manifests` | Downloads only the selected clips into a local Colab WAV cache and writes Drive-backed NeMo JSONL files; the cache is recreated automatically after a runtime reset | `artifacts/nemo/manifests/` |
 | `04_baseline_fastconformer` | Measures untouched Arabic FastConformer on held-out test reciter(s) | Baseline WER/CER and predictions |
 | `05_finetune_fastconformer` | Runs progressive unfreezing stages through NeMo | Stage checkpoints and `fastconformer-quran.nemo` |
 | `06_evaluate_fastconformer` | Measures final model on the unchanged test reciter(s) | Final WER/CER and predictions |
@@ -99,7 +99,7 @@ The detailed contract appears in [`docs/EVALUATION_MATRIX.md`](docs/EVALUATION_M
 | Artifact | Purpose |
 |---|---|
 | `artifacts/manifests/experiment_manifest.json` | Reproducible evidence of the held-out-reciter split |
-| `artifacts/nemo/manifests/*.jsonl` | Local NeMo audio/text manifests |
+| `artifacts/nemo/manifests/*.jsonl` | Drive-backed NeMo text manifests; their local WAV cache is rebuilt automatically whenever a fresh runtime needs it |
 | `results/baseline/` | Untouched-model predictions and metrics |
 | `results/finetuned/` | Fine-tuned-model predictions and metrics |
 | `models/fastconformer-quran.nemo` | Exported final NeMo model |

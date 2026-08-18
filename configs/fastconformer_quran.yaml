@@ -4,6 +4,8 @@ project:
   name: quran-fastconformer-colab
   seed: 2419
   artifacts_dir: artifacts
+  # WAV files are intentionally kept on Colab local disk; Drive stores durable manifests, checkpoints, models, and reports.
+  runtime_audio_dir: /content/quran-fastconformer-audio
 
 dataset:
   name: tarteel-ai/everyayah

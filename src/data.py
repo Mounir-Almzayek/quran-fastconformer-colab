@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import tempfile
 from collections import defaultdict
 from collections.abc import Iterator, Mapping
 from pathlib import Path
@@ -247,10 +249,49 @@ def _replay_selected_rows(config: Mapping[str, Any], manifest: Mapping[str, Any]
         raise RuntimeError(f"Could not replay {len(missing)} selected source rows.")
 
 
+def _write_wav_atomically(destination: Path, waveform: np.ndarray, sample_rate: int) -> None:
+    """Write through local disk, then copy to Drive and confirm the file is readable."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_root = Path(tempfile.gettempdir()) / "quran_fastconformer_wav_staging"
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    temporary_path = temporary_root / f"{destination.stem}.{hashlib.sha256(str(destination).encode()).hexdigest()[:10]}.wav"
+    try:
+        sf.write(temporary_path, waveform, sample_rate, subtype="PCM_16")
+        shutil.copyfile(temporary_path, destination)
+        if not destination.is_file() or destination.stat().st_size < 44:
+            raise RuntimeError(f"WAV write did not persist at {destination}.")
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _validate_materialized_manifests(paths: Mapping[str, Path], manifest: Mapping[str, Any]) -> None:
+    """Reject JSONL files that reference missing or empty WAV artifacts."""
+    for split_name, path in paths.items():
+        records = load_nemo_manifest(path)
+        expected_count = len(manifest["splits"][split_name])
+        if len(records) != expected_count:
+            raise RuntimeError(
+                f"NeMo {split_name} manifest has {len(records)} records; expected {expected_count}."
+            )
+        missing = [
+            row["audio_filepath"]
+            for row in records
+            if not Path(row["audio_filepath"]).is_file() or Path(row["audio_filepath"]).stat().st_size < 44
+        ]
+        if missing:
+            preview = ", ".join(missing[:3])
+            raise RuntimeError(
+                f"NeMo {split_name} manifest references {len(missing)} unavailable WAV files. "
+                f"Examples: {preview}"
+            )
+
+
 def materialize_nemo_manifests(config: Mapping[str, Any], manifest: Mapping[str, Any], project_root: Path) -> dict[str, Path]:
-    """Download exactly the chosen clips, write WAV files, and produce NeMo JSONL manifests."""
+    """Download exactly the chosen clips, write verified WAV files, and produce NeMo JSONL manifests."""
     artifacts = project_root / config["project"]["artifacts_dir"]
-    audio_root = artifacts / "nemo" / "audio"
+    # Drive remains the durable home for JSONL, checkpoints, and reports. WAVs
+    # stay on Colab's local disk because NeMo must open thousands of them quickly.
+    audio_root = Path(config["project"].get("runtime_audio_dir", "/content/quran-fastconformer-audio"))
     manifest_root = artifacts / "nemo" / "manifests"
     manifest_root.mkdir(parents=True, exist_ok=True)
     handles: dict[str, Any] = {}
@@ -274,7 +315,8 @@ def materialize_nemo_manifests(config: Mapping[str, Any], manifest: Mapping[str,
             filename = f"{int(metadata['stream_position']):08d}.wav"
             audio_path = audio_root / split_name / filename
             waveform = np.asarray(audio["array"], dtype=np.float32)
-            sf.write(audio_path, waveform, target_rate, subtype="PCM_16")
+            if not audio_path.is_file() or audio_path.stat().st_size < 44:
+                _write_wav_atomically(audio_path, waveform, target_rate)
             record = {
                 "audio_filepath": str(audio_path.resolve()),
                 "duration": float(metadata["duration"]),
@@ -287,6 +329,19 @@ def materialize_nemo_manifests(config: Mapping[str, Any], manifest: Mapping[str,
     finally:
         for handle in handles.values():
             handle.close()
+    _validate_materialized_manifests(paths, manifest)
+    return paths
+
+
+def ensure_nemo_audio_cache(config: Mapping[str, Any], manifest: Mapping[str, Any], project_root: Path) -> dict[str, Path]:
+    """Reuse a valid local WAV cache or rebuild it after a Colab runtime reset."""
+    artifacts = project_root / config["project"]["artifacts_dir"]
+    paths = {split: artifacts / "nemo" / "manifests" / f"{split}.jsonl" for split in ("train", "validation", "test")}
+    try:
+        _validate_materialized_manifests(paths, manifest)
+    except (FileNotFoundError, RuntimeError) as error:
+        print(f"Rebuilding local NeMo audio cache: {error}")
+        return materialize_nemo_manifests(config, manifest, project_root)
     return paths
 
 
