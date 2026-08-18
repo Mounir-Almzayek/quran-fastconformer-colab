@@ -152,9 +152,25 @@ def build_manifest(config: Mapping[str, Any], destination: str | Path) -> dict[s
         "validation": _take_cap([row for reciter in validation_reciters for row in by_reciter[reciter]], int(caps["validation"]), "validation"),
         "test": _take_cap([row for reciter in test_reciters for row in by_reciter[reciter]], int(caps["test"]), "test"),
     }
-    owners = {row["reciter"]: split for split, rows in selections.items() for row in rows}
-    if set(owners) != set(train_reciters) | set(validation_reciters) | set(test_reciters):
-        raise RuntimeError("Reciter assignment became inconsistent while creating the manifest.")
+    selected_reciters = {
+        split_name: {str(row["reciter"]) for row in rows}
+        for split_name, rows in selections.items()
+    }
+    expected_reciters = {
+        "train": set(train_reciters),
+        "validation": set(validation_reciters),
+        "test": set(test_reciters),
+    }
+    if any(not selected_reciters[name] for name in selected_reciters):
+        raise RuntimeError("At least one split is empty after reciter-level selection.")
+    if any(not selected_reciters[name].issubset(expected_reciters[name]) for name in selected_reciters):
+        raise RuntimeError("A selected row was assigned to the wrong reciter split.")
+    if (
+        selected_reciters["train"] & selected_reciters["validation"]
+        or selected_reciters["train"] & selected_reciters["test"]
+        or selected_reciters["validation"] & selected_reciters["test"]
+    ):
+        raise RuntimeError("Reciter leakage detected while creating the manifest.")
 
     manifest = {
         "format_version": 3,
