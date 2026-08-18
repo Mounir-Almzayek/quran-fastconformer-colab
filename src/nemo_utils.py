@@ -23,12 +23,21 @@ def load_pretrained_ctc_model(model_name: str) -> Any:
     return model
 
 
+def load_exported_ctc_model(model_path: str | Path) -> Any:
+    """Restore a completed stage export and keep CTC as the selected decoder."""
+    _, nemo_asr, _ = import_nemo()
+    model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.restore_from(str(model_path))
+    model.change_decoding_strategy(decoder_type="ctc")
+    return model
+
+
 def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path, test_manifest: Path, config: Mapping[str, Any]) -> None:
     """Point the pretrained model at local WAV/JSONL files while retaining its tokenizer."""
     _, _, open_dict = import_nemo()
     batch_size = int(config["training"]["batch_size"])
     validation_batch_size = int(config["training"]["validation_batch_size"])
     workers = int(config["training"]["num_workers"])
+    pin_memory = bool(config["training"].get("pin_memory", False))
     sample_rate = int(config["model"]["sample_rate"])
 
     with open_dict(model.cfg):
@@ -43,6 +52,9 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         model.cfg.train_ds.manifest_filepath = str(train_manifest)
         model.cfg.train_ds.batch_size = batch_size
         model.cfg.train_ds.num_workers = workers
+        # Drive-backed Colab sessions have limited CPU RAM. Avoid pinned host buffers
+        # and worker prefetch queues unless a larger runtime is explicitly configured.
+        model.cfg.train_ds.pin_memory = pin_memory
         model.cfg.train_ds.shuffle = True
         model.cfg.train_ds.sample_rate = sample_rate
         model.cfg.train_ds.max_duration = float(config["dataset"]["max_duration_seconds"])
@@ -52,6 +64,7 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         model.cfg.validation_ds.manifest_filepath = str(validation_manifest)
         model.cfg.validation_ds.batch_size = validation_batch_size
         model.cfg.validation_ds.num_workers = workers
+        model.cfg.validation_ds.pin_memory = pin_memory
         model.cfg.validation_ds.shuffle = False
         model.cfg.validation_ds.sample_rate = sample_rate
 
@@ -59,6 +72,7 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         model.cfg.test_ds.manifest_filepath = str(test_manifest)
         model.cfg.test_ds.batch_size = validation_batch_size
         model.cfg.test_ds.num_workers = workers
+        model.cfg.test_ds.pin_memory = pin_memory
         model.cfg.test_ds.shuffle = False
         model.cfg.test_ds.sample_rate = sample_rate
 

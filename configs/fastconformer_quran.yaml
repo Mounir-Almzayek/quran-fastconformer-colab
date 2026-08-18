@@ -46,7 +46,13 @@ training:
   final_model_path: artifacts/models/fastconformer-quran.nemo
   batch_size: 4
   validation_batch_size: 4
-  num_workers: 2
+  # Single-process audio loading is slower but prevents worker queues from
+  # exhausting the 12.7 GB RAM commonly available in free Colab runtimes.
+  num_workers: 0
+  pin_memory: false
+  # Save full Lightning recovery state to Drive every 500 optimizer steps.
+  # Re-running the same command resumes this stage automatically from last.ckpt.
+  checkpoint_every_n_train_steps: 500
   precision: 16-mixed
   gradient_clip_val: 1.0
   # Conservative, progressive adaptation: begin with the top encoder layers plus
