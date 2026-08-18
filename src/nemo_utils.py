@@ -32,6 +32,14 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
     sample_rate = int(config["model"]["sample_rate"])
 
     with open_dict(model.cfg):
+        # The checkpoint stores a reconstruction-only tokenizer directory as a
+        # mandatory placeholder; its already-loaded tokenizer remains in use.
+        model.cfg.tokenizer.dir = None
+        # The pretrained checkpoint defaults to tarred training data with a
+        # mandatory placeholder path. This project uses ordinary local WAV files.
+        model.cfg.train_ds.is_tarred = False
+        model.cfg.train_ds.tarred_audio_filepaths = None
+        model.cfg.train_ds.shuffle_n = 0
         model.cfg.train_ds.manifest_filepath = str(train_manifest)
         model.cfg.train_ds.batch_size = batch_size
         model.cfg.train_ds.num_workers = workers
@@ -40,12 +48,14 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         model.cfg.train_ds.max_duration = float(config["dataset"]["max_duration_seconds"])
         model.cfg.train_ds.min_duration = float(config["dataset"]["min_duration_seconds"])
 
+        model.cfg.validation_ds.is_tarred = False
         model.cfg.validation_ds.manifest_filepath = str(validation_manifest)
         model.cfg.validation_ds.batch_size = validation_batch_size
         model.cfg.validation_ds.num_workers = workers
         model.cfg.validation_ds.shuffle = False
         model.cfg.validation_ds.sample_rate = sample_rate
 
+        model.cfg.test_ds.is_tarred = False
         model.cfg.test_ds.manifest_filepath = str(test_manifest)
         model.cfg.test_ds.batch_size = validation_batch_size
         model.cfg.test_ds.num_workers = workers
