@@ -58,7 +58,7 @@ drive.mount('/content/drive')
 """),
         code(PROJECT_CELL),
         code("""!nvidia-smi
-!pip install --quiet --upgrade -r requirements.txt
+!pip install --quiet --no-cache-dir -r requirements.txt
 """),
         code("""# Create and validate the disjoint-reciter split. No audio files are downloaded in this first step.
 !python run_colab_setup.py --config configs/fastconformer_quran.yaml

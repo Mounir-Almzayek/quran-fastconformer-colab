@@ -19,6 +19,7 @@ def main() -> None:
     assert config["model"]["decoder"] == "ctc"
     assert config["dataset"]["reciter_split"]["strategy"] == "disjoint_reciters"
     assert config["dataset"]["sample_caps"] == {"train": 8000, "validation": 1000, "test": 1000}
+    assert config["dataset"]["shuffle_buffer"] <= 1024
     assert [stage["encoder_layers"] for stage in config["training"]["stages"]] == ["top_3", "upper_half", "all"]
 
     contract = yaml.safe_load((ROOT / "configs" / "evaluation_matrix.yaml").read_text(encoding="utf-8"))

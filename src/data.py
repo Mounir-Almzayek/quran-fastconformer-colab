@@ -20,14 +20,20 @@ from src.metrics import normalize_text, text_group_key
 REQUIRED_COLUMNS = {"audio", "text", "duration", "reciter"}
 
 
-def _base_stream(config: Mapping[str, Any]) -> IterableDataset:
-    """Open the source split as a stream; no corpus-wide download is performed."""
+def _base_stream(config: Mapping[str, Any], decode_audio: bool = False) -> IterableDataset:
+    """Open the source split without decoding audio into the shuffle buffer by default."""
     dataset_config = config["dataset"]
-    return load_dataset(
+    stream = load_dataset(
         dataset_config["name"],
         name=dataset_config.get("config"),
         split=dataset_config["source_split"],
         streaming=bool(dataset_config["streaming"]),
+    )
+    # The metadata-selection pass must not retain decoded waveforms in the
+    # streaming shuffle buffer. Audio is decoded only in the materialization pass.
+    return stream.cast_column(
+        "audio",
+        Audio(sampling_rate=int(dataset_config["target_sampling_rate"]), decode=decode_audio),
     )
 
 
@@ -201,9 +207,12 @@ def _replay_selected_rows(config: Mapping[str, Any], manifest: Mapping[str, Any]
     for split_name, rows in manifest["splits"].items():
         for metadata in rows:
             expected[int(metadata["stream_position"])] = (split_name, metadata)
-    stream = _base_stream(config).shuffle(
+    stream = _base_stream(config, decode_audio=False).shuffle(
         seed=int(manifest["selection"]["seed"]),
         buffer_size=int(manifest["selection"]["shuffle_buffer"]),
+    ).cast_column(
+        "audio",
+        Audio(sampling_rate=int(config["dataset"]["target_sampling_rate"]), decode=True),
     )
     highest = max(expected)
     seen: set[int] = set()

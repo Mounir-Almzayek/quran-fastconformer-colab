@@ -13,7 +13,8 @@ dataset:
   target_sampling_rate: 16000
   min_duration_seconds: 0.3
   max_duration_seconds: 25.0
-  shuffle_buffer: 32000
+  # Small bounded shuffle buffer keeps Colab RAM stable while source audio is streamed.
+  shuffle_buffer: 1024
   candidate_pool_size: 30000
   # Maximum materialized clips. Audio is downloaded only for these selected rows
   # because NeMo manifests need local WAV files; the rest of EveryAyah stays remote.
