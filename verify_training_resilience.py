@@ -28,6 +28,11 @@ def main() -> None:
         "training_state.json",
         "stage_complete.json",
         "load_exported_ctc_model",
+        "CompactConsoleReporter",
+        "enable_progress_bar=False",
+        "[progress] step/total",
+        "[checkpoint] step",
+        "[validation] stage",
     ):
         assert expected in train_source, f"Missing recovery behavior: {expected}"
 
@@ -35,6 +40,8 @@ def main() -> None:
     ast.parse(nemo_source)
     assert "load_exported_ctc_model" in nemo_source
     assert "model.cfg.train_ds.pin_memory = pin_memory" in nemo_source
+    assert "configure_compact_nemo_logging" in nemo_source
+    assert "metric.log_prediction = False" in nemo_source
 
     notebook = json.loads((ROOT / "notebooks" / "05_finetune_fastconformer.ipynb").read_text(encoding="utf-8"))
     notebook_sources = []
@@ -44,8 +51,9 @@ def main() -> None:
     notebook_text = "\n".join(notebook_sources)
     assert "restart-safe" in notebook_text
     assert "training_state.json" in notebook_text
+    assert "console is intentionally compact" in notebook_text
 
-    print("Passed: recovery checkpoints, automatic resume, and low-RAM defaults are configured.")
+    print("Passed: recovery checkpoints, low-RAM defaults, and compact console logging are configured.")
 
 
 if __name__ == "__main__":

@@ -53,6 +53,9 @@ training:
   # Save full Lightning recovery state to Drive every 500 optimizer steps.
   # Re-running the same command resumes this stage automatically from last.ckpt.
   checkpoint_every_n_train_steps: 500
+  # Print one concise progress line every 100 steps instead of verbose
+  # per-sample RNNT predictions emitted by the pretrained hybrid model.
+  progress_every_n_train_steps: 100
   precision: 16-mixed
   gradient_clip_val: 1.0
   # Conservative, progressive adaptation: begin with the top encoder layers plus

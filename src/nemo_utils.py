@@ -15,6 +15,19 @@ def import_nemo() -> tuple[Any, Any, Any]:
     return pl, nemo_asr, open_dict
 
 
+def configure_compact_nemo_logging() -> None:
+    """Keep warnings visible while suppressing verbose per-sample NeMo diagnostics."""
+    import logging as python_logging
+
+    try:
+        from nemo.utils import logging as nemo_logging
+
+        nemo_logging.set_verbosity(python_logging.WARNING)
+    except (AttributeError, ImportError):
+        # Training remains correct if a future NeMo release exposes logging differently.
+        pass
+
+
 def load_pretrained_ctc_model(model_name: str) -> Any:
     """Load the Arabic hybrid FastConformer and explicitly select its CTC decoder."""
     _, nemo_asr, _ = import_nemo()
@@ -44,6 +57,9 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         # The checkpoint stores a reconstruction-only tokenizer directory as a
         # mandatory placeholder; its already-loaded tokenizer remains in use.
         model.cfg.tokenizer.dir = None
+        # Hybrid NeMo models otherwise emit reference/prediction pairs for the
+        # RNNT diagnostic metric during validation, overwhelming the Colab log.
+        model.cfg.log_prediction = False
         # The pretrained checkpoint defaults to tarred training data with a
         # mandatory placeholder path. This project uses ordinary local WAV files.
         model.cfg.train_ds.is_tarred = False
@@ -79,6 +95,13 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
     model.setup_training_data(model.cfg.train_ds)
     model.setup_validation_data(model.cfg.validation_ds)
     model.setup_test_data(model.cfg.test_ds)
+
+    # These metrics are created while the pretrained model is restored, before
+    # the project config is attached. Update the live objects as well as cfg.
+    for metric_name in ("wer", "ctc_wer"):
+        metric = getattr(model, metric_name, None)
+        if metric is not None and hasattr(metric, "log_prediction"):
+            metric.log_prediction = False
 
 
 def configure_trainable_layers(model: Any, policy: str) -> None:
