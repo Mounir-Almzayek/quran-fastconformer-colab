@@ -51,6 +51,22 @@ os.chdir(PROJECT_DIR)
 print("Working directory:", Path.cwd())
 '''
 
+DEPENDENCY_GUARD_CELL = '''import importlib.util
+import subprocess
+import sys
+
+# A notebook can be opened after a runtime restart. Install project dependencies
+# only when a required module is missing, rather than assuming notebook 01 ran.
+required_modules = ("datasets", "jiwer", "soundfile", "yaml", "nemo", "pandas", "matplotlib")
+
+missing_modules = [name for name in required_modules if importlib.util.find_spec(name) is None]
+if missing_modules:
+    print("Installing missing runtime dependencies:", missing_modules)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "-r", "requirements.txt"])
+else:
+    print("Core project dependencies are available.")
+'''
+
 
 def main() -> None:
     NOTEBOOKS.mkdir(parents=True, exist_ok=True)
@@ -64,8 +80,8 @@ This notebook prepares a single-GPU Colab runtime, validates the current EveryAy
 drive.mount('/content/drive')
 """),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""!nvidia-smi
-!pip install --quiet --no-cache-dir -r requirements.txt
 """),
         code("""# Create and validate the disjoint-reciter split. No audio files are downloaded in this first step.
 !python run_colab_setup.py --config configs/fastconformer_quran.yaml
@@ -77,6 +93,7 @@ drive.mount('/content/drive')
 
 The source is read with streaming. This notebook is a schema sanity check; it does not download the full dataset."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""from datasets import load_dataset
 
 stream = load_dataset("tarteel-ai/everyayah", name="default", split="train", streaming=True)
@@ -94,6 +111,7 @@ for index, item in zip(range(3), stream):
 
 NeMo training requires local audio paths. This stage downloads **only** the rows selected in the manifest and writes WAV files plus JSONL manifests for Train, Validation, and Test. The rest of EveryAyah remains undownloaded."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --materialize
 """),
         code("""import json
@@ -118,6 +136,7 @@ print("Passed: all validation/test reciters are unseen during training.")
 
 This measures the untouched NVIDIA Arabic FastConformer on the held-out test reciter(s). The result is the only valid Before value for this manifest."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""!python -m src.baseline --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
 """),
         code("""import json
@@ -134,6 +153,7 @@ print(f"Diagnostic WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {met
 
 The workflow keeps the pretrained Arabic tokenizer, selects CTC decoding, and performs conservative staged adaptation: top three encoder layers, upper half, then the full model. Every stage stores checkpoints under the Drive-backed project folder."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 """),
@@ -151,6 +171,7 @@ summary
 
 This evaluates the exported `.nemo` file on the same held-out reciter set used in notebook 04. It does not select checkpoints or change data membership."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""!python -m src.evaluate --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
 """),
         code("""import json
@@ -167,6 +188,7 @@ print(f"Diagnostic WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {met
 
 This final notebook verifies that baseline and final metrics use the same manifest, then creates strict/diagnostic global scores plus breakouts by held-out reciter and recording duration."""),
         code(PROJECT_CELL),
+        code(DEPENDENCY_GUARD_CELL),
         code("""!python -m src.compare --config configs/fastconformer_quran.yaml
 """),
         code("""import pandas as pd
