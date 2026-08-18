@@ -1,0 +1,11 @@
+# Google Colab dependencies for the FastConformer Quran ASR experiment.
+# Colab supplies a CUDA-compatible Torch build; do not pin or reinstall torch here.
+nemo_toolkit[asr]>=2.0,<3.0
+lightning>=2.4,<3.0
+omegaconf>=2.3,<3.0
+datasets>=3.2,<4.0
+soundfile>=0.12,<0.14
+jiwer>=3.0,<4.0
+pyyaml>=6.0,<7.0
+pandas>=2.0,<3.0
+matplotlib>=3.7,<4.0

@@ -1,0 +1,17 @@
+# Generated experiment outputs
+artifacts/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local environment and editor files
+.venv/
+venv/
+.env
+.vscode/
+.DS_Store

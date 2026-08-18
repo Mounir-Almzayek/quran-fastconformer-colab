@@ -1,0 +1,80 @@
+# Evaluation contract for the current Quranic ASR experiment.
+# Only metrics with available predictions and ground truth may be reported as results.
+version: 1
+
+scope:
+  current_pipeline: fastconformer_quran_text_asr
+  dataset_assumption: correct recitations with ayah-level audio and transcription
+  primary_test_policy: locked_disjoint_reciter_manifest
+
+active_metrics:
+  - id: strict_wer
+    source: src.metrics.build_metrics.strict.wer
+    unit: proportion
+    purpose: Word recognition error with diacritics retained.
+  - id: strict_cer
+    source: src.metrics.build_metrics.strict.cer
+    unit: proportion
+    purpose: Character recognition error with diacritics retained.
+  - id: diagnostic_wer
+    source: src.metrics.build_metrics.diagnostic.wer
+    unit: proportion
+    purpose: Lexical word error after diagnostic Arabic normalization.
+  - id: diagnostic_cer
+    source: src.metrics.build_metrics.diagnostic.cer
+    unit: proportion
+    purpose: Character error after diagnostic Arabic normalization.
+  - id: per_reciter_breakdown
+    source: artifacts/results/comparison/metrics_by_reciter.csv
+    unit: subgroup table
+    purpose: Check whether text-ASR performance differs across reciters.
+  - id: per_duration_breakdown
+    source: artifacts/results/comparison/metrics_by_duration.csv
+    unit: subgroup table
+    purpose: Check whether text-ASR performance differs by recording length.
+
+reserved_for_phoneme_pipeline:
+  # These become reportable only after the project receives aligned phoneme
+  # reference labels and output from an actual phoneme model.
+  - id: per
+    name: Phoneme Error Rate
+    prerequisites: [phoneme_reference, phoneme_prediction]
+  - id: phoneme_substitution_rate
+    prerequisites: [phoneme_reference, phoneme_prediction, phoneme_alignment]
+  - id: phoneme_deletion_rate
+    prerequisites: [phoneme_reference, phoneme_prediction, phoneme_alignment]
+  - id: phoneme_insertion_rate
+    prerequisites: [phoneme_reference, phoneme_prediction, phoneme_alignment]
+  - id: tashkeel_f1
+    prerequisites: [diacritic_reference, diacritic_prediction]
+
+deferred_until_position_labels:
+  # Do not present these as measured values while word/ayah time references are absent.
+  - id: ayah_accuracy
+    prerequisites: [ayah_identifier_reference, model_position_output]
+  - id: word_accuracy
+    prerequisites: [word_position_reference, model_position_output]
+  - id: location_latency
+    prerequisites: [word_or_ayah_timestamps, timestamped_model_position_output]
+  - id: acquisition_time
+    prerequisites: [session_start_marker, position_reference, model_position_output]
+  - id: reacquisition_time
+    prerequisites: [known_jump_or_loss_event, position_reference, model_position_output]
+
+deferred_until_runtime_instrumentation:
+  - id: rtf
+    prerequisites: [audio_duration, inference_wall_clock]
+  - id: peak_vram
+    prerequisites: [cuda_runtime, memory_peak_logger]
+  - id: ram
+    prerequisites: [process_memory_logger]
+
+excluded_without_labeled_errors:
+  # These require real or carefully validated synthetic recitations with explicit
+  # error type, location, and onset annotations. They must not be estimated from
+  # correct-recitation data alone.
+  - id: mistake_precision
+  - id: mistake_recall
+  - id: mistake_f1
+  - id: false_alarms_per_minute
+  - id: detection_latency

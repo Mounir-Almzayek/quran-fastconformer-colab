@@ -1,0 +1,80 @@
+# Independent FastConformer Quran ASR experiment for a single Colab GPU.
+# The pretrained tokenizer is preserved; this project does not build a copied tokenizer.
+project:
+  name: quran-fastconformer-colab
+  seed: 2419
+  artifacts_dir: artifacts
+
+dataset:
+  name: tarteel-ai/everyayah
+  config: default
+  source_split: train
+  streaming: true
+  target_sampling_rate: 16000
+  min_duration_seconds: 0.3
+  max_duration_seconds: 25.0
+  shuffle_buffer: 32000
+  candidate_pool_size: 30000
+  # Maximum materialized clips. Audio is downloaded only for these selected rows
+  # because NeMo manifests need local WAV files; the rest of EveryAyah stays remote.
+  sample_caps:
+    train: 8000
+    validation: 1000
+    test: 1000
+  reciter_split:
+    strategy: disjoint_reciters
+    minimum_samples_per_holdout_reciter: 1000
+    validation_reciters: 1
+    test_reciters: 1
+
+text:
+  # Target labels retain diacritics and are canonicalized consistently before NeMo sees them.
+  target_normalization: canonical
+  primary_normalization: canonical
+  diagnostic_normalization: quranic_light
+
+model:
+  pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0
+  decoder: ctc
+  sample_rate: 16000
+
+training:
+  work_dir: artifacts/nemo
+  final_model_path: artifacts/models/fastconformer-quran.nemo
+  batch_size: 4
+  validation_batch_size: 4
+  num_workers: 2
+  precision: 16-mixed
+  gradient_clip_val: 1.0
+  # Conservative, progressive adaptation: begin with the top encoder layers plus
+  # CTC decoder, then expand training while lowering the learning rate.
+  stages:
+    - name: top_encoder_and_ctc
+      encoder_layers: top_3
+      max_epochs: 1
+      learning_rate: 5.0e-5
+    - name: upper_encoder_and_ctc
+      encoder_layers: upper_half
+      max_epochs: 1
+      learning_rate: 2.0e-5
+    - name: full_model
+      encoder_layers: all
+      max_epochs: 2
+      learning_rate: 1.0e-5
+
+reporting:
+  baseline_metrics_file: artifacts/results/baseline/metrics.json
+  finetuned_metrics_file: artifacts/results/finetuned/metrics.json
+  comparison_dir: artifacts/results/comparison
+  representative_examples: 12
+  duration_bins_seconds:
+    - label: short_0_to_10
+      lower: 0.0
+      upper: 10.0
+    - label: medium_10_to_20
+      lower: 10.0
+      upper: 20.0
+    - label: long_20_to_25
+      lower: 20.0
+      upper: 25.000001
+  minimum_group_examples: 5
