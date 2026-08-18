@@ -36,9 +36,16 @@ def save(filename: str, cells: list[dict]) -> None:
 PROJECT_CELL = '''from pathlib import Path
 import os
 
+# Each notebook may open in a fresh Colab runtime, so mount Drive before any
+# path check rather than relying on a previous notebook's session.
+from google.colab import drive
+DRIVE_ROOT = Path("/content/drive/MyDrive")
+if not DRIVE_ROOT.exists():
+    drive.mount("/content/drive")
+
 # Place the *contents* of this repository in this Google Drive folder, or edit
 # this one variable to match the folder you chose.
-PROJECT_DIR = Path("/content/drive/MyDrive/quran-fastconformer-colab")
+PROJECT_DIR = DRIVE_ROOT / "quran-fastconformer-colab"
 assert PROJECT_DIR.exists(), f"Project directory not found: {PROJECT_DIR}"
 os.chdir(PROJECT_DIR)
 print("Working directory:", Path.cwd())
