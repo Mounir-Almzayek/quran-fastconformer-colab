@@ -60,9 +60,16 @@ import sys
 required_modules = ("datasets", "jiwer", "soundfile", "yaml", "nemo", "pandas", "matplotlib")
 
 missing_modules = [name for name in required_modules if importlib.util.find_spec(name) is None]
-if missing_modules:
-    print("Installing missing runtime dependencies:", missing_modules)
+needs_numpy_downgrade = False
+if not missing_modules:
+    import numpy as np
+    needs_numpy_downgrade = int(np.__version__.split(".")[0]) >= 2
+
+if missing_modules or needs_numpy_downgrade:
+    reason = missing_modules or ["numpy<2 required by the current NeMo audio loader"]
+    print("Installing compatible runtime dependencies:", reason)
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "-r", "requirements.txt"])
+    print("Dependencies updated. Restart the runtime once before launching a NeMo stage.")
 else:
     print("Core project dependencies are available.")
 '''

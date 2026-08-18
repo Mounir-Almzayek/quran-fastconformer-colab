@@ -20,6 +20,7 @@ def main() -> None:
     assert config["dataset"]["reciter_split"]["strategy"] == "disjoint_reciters"
     assert config["dataset"]["sample_caps"] == {"train": 8000, "validation": 1000, "test": 1000}
     assert config["dataset"]["shuffle_buffer"] <= 1024
+    assert config["project"]["runtime_audio_dir"] == "/content/quran-fastconformer-audio"
     assert [stage["encoder_layers"] for stage in config["training"]["stages"]] == ["top_3", "upper_half", "all"]
 
     contract = yaml.safe_load((ROOT / "configs" / "evaluation_matrix.yaml").read_text(encoding="utf-8"))
@@ -28,6 +29,9 @@ def main() -> None:
 
     for source in sorted((ROOT / "src").glob("*.py")):
         ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "numpy==1.26.4" in requirements
 
     expected_notebooks = [
         "01_setup.ipynb",
