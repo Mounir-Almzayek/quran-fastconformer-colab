@@ -42,7 +42,7 @@ def main() -> None:
 
     for source in sorted((ROOT / "src").glob("*.py")):
         ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
-    for script_name in ("run_colab_setup.py", "make_notebooks.py"):
+    for script_name in ("run_colab_setup.py", "make_notebooks.py", "make_master_notebook.py", "update_colab_dependency_guards.py"):
         ast.parse((ROOT / script_name).read_text(encoding="utf-8"), filename=script_name)
     notebook_generator = (ROOT / "make_notebooks.py").read_text(encoding="utf-8")
     assert "Create the PC v2 split once" in notebook_generator
@@ -53,6 +53,7 @@ def main() -> None:
     assert "numpy==1.26.4" in requirements
 
     expected_notebooks = [
+        "00_run_pc_v2_end_to_end.ipynb",
         "01_setup.ipynb",
         "02_inspect_everyayah.ipynb",
         "03_prepare_nemo_manifests.ipynb",
@@ -66,6 +67,23 @@ def main() -> None:
     for notebook_name in observed_notebooks:
         notebook = json.loads((ROOT / "notebooks" / notebook_name).read_text(encoding="utf-8"))
         assert notebook["nbformat"] == 4 and notebook["cells"]
+
+    master = json.loads((ROOT / "notebooks" / "00_run_pc_v2_end_to_end.ipynb").read_text(encoding="utf-8"))
+    master_text = "\n".join(
+        "".join(cell.get("source", "")) if isinstance(cell.get("source", ""), list) else cell.get("source", "")
+        for cell in master["cells"]
+    )
+    for expected in (
+        "only notebook needed for normal execution",
+        "QURAN_COLAB_RESTART_REQUIRED",
+        "run_colab_setup.py --config configs/fastconformer_quran.yaml",
+        "--materialize",
+        "python -m src.baseline",
+        "python -m src.train",
+        "python -m src.evaluate",
+        "python -m src.compare",
+    ):
+        assert expected in master_text, f"Master notebook is missing: {expected}"
 
     assert (ROOT / "docs" / "EVALUATION_MATRIX.md").is_file()
     assert not (ROOT / "configs" / "whisper_base.yaml").exists()

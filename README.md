@@ -62,12 +62,19 @@ quran-fastconformer-colab/
 └── requirements.txt
 ```
 
-## Run order in Colab
+## Primary one-session run in Colab
 
-Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastconformer-colab`. If you choose another name, change `PROJECT_DIR` in the first code cell of each notebook. Select **Runtime → Change runtime type → GPU** in Colab, then execute the notebooks in this order.
+Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastconformer-colab`. Select **Runtime → Change runtime type → GPU**, then open **`notebooks/00_run_pc_v2_end_to_end.ipynb`**. It is the normal execution path and keeps setup, data preparation, baseline, fine-tuning, evaluation, and comparison inside one Colab runtime.
+
+> On the first use, run the environment cells first. If the dependency guard asks for a runtime restart, restart once and then use **Runtime → Run all** from the top. Do not manually switch among numbered notebooks during the normal PC v2 workflow.
+
+## Numbered notebooks: reference and recovery only
+
+The numbered notebooks remain available for inspection or targeted recovery, but they are not required for normal execution of PC v2.
 
 | Notebook | Purpose | Main output |
 |---|---|---|
+| `00_run_pc_v2_end_to_end` | **Primary one-session PC v2 workflow**: environment, manifest, audio, baseline, training, evaluation, comparison | Complete PC v2 experiment in one runtime |
 | `01_setup` | Mounts Drive, installs NeMo, checks the schema, and creates the immutable **PC v2** manifest with two backup copies | `artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json` |
 | `02_inspect_everyayah` | Inspects a few real streamed rows | Schema confirmation |
 | `03_prepare_nemo_manifests` | Reuses the locked PC v2 split, downloads only selected clips into a local Colab WAV cache, and writes PC v2 Drive-backed NeMo JSONL files | `artifacts/experiments/fastconformer_pc_v2/nemo/manifests/` |

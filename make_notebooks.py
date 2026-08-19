@@ -54,6 +54,7 @@ print("Working directory:", Path.cwd())
 DEPENDENCY_GUARD_CELL = '''
 from pathlib import Path
 import importlib.util
+import os
 import shutil
 import site
 import subprocess
@@ -103,10 +104,12 @@ if compatibility_error:
         "numpy==1.26.4",
         "pandas==2.2.3",
     ])
+    os.environ["QURAN_COLAB_RESTART_REQUIRED"] = "1"
     print("Clean NumPy repair completed. Use Runtime → Restart session before running any other cell.")
 elif missing_modules:
     print("Installing missing project dependencies:", missing_modules)
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "-r", "requirements.txt"])
+    os.environ["QURAN_COLAB_RESTART_REQUIRED"] = "1"
     print("Dependencies updated. Use Runtime → Restart session before launching a NeMo stage.")
 else:
     print("Core project dependencies and NumPy binary compatibility are available.")
