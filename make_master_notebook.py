@@ -53,23 +53,30 @@ print("Working directory:", PROJECT_DIR)
 VENV_CELL = '''from pathlib import Path
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
-import venv
 
 # Keep project dependencies separate from Colab's preinstalled Python packages.
 # This prevents NumPy 1.26.4 (required by NeMo) from replacing Colab's own
 # NumPy stack, so no runtime restart is needed after package installation.
 VENV_DIR = Path("/content/quran-fastconformer-venv")
 VENV_PYTHON = VENV_DIR / "bin" / "python"
+VENV_READY = VENV_DIR / ".virtualenv_ready"
 REQUIREMENTS = PROJECT_DIR / "requirements.txt"
 MARKER = VENV_DIR / ".requirements_sha256"
 requirements_hash = hashlib.sha256(REQUIREMENTS.read_bytes()).hexdigest()
 
-if not VENV_PYTHON.exists():
-    print("Creating isolated project environment...")
-    venv.EnvBuilder(with_pip=True, system_site_packages=True).create(VENV_DIR)
-    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+# Google Colab images can disable ensurepip, so use virtualenv's bundled seeder
+# rather than the standard-library venv module. If a previous creation failed,
+# the missing readiness marker causes the partial directory to be rebuilt.
+if not VENV_READY.exists():
+    print("Creating isolated project environment with virtualenv...")
+    shutil.rmtree(VENV_DIR, ignore_errors=True)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "virtualenv>=20.26,<21"])
+    subprocess.check_call([sys.executable, "-m", "virtualenv", "--system-site-packages", str(VENV_DIR)])
+    assert VENV_PYTHON.exists(), f"virtualenv creation failed: {VENV_PYTHON}"
+    VENV_READY.write_text("ready\\n", encoding="utf-8")
 
 if not MARKER.exists() or MARKER.read_text(encoding="utf-8").strip() != requirements_hash:
     print("Installing project dependencies into the isolated environment. This runs once per fresh Colab runtime...")

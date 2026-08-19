@@ -76,6 +76,8 @@ def main() -> None:
     for expected in (
         "only notebook needed for normal execution",
         "quran-fastconformer-venv",
+        "virtualenv>=20.26,<21",
+        "virtualenv\", \"--system-site-packages",
         "run_project_script",
         "run_project_module",
         "No Colab restart is required",
@@ -87,6 +89,8 @@ def main() -> None:
         "src.compare",
     ):
         assert expected in master_text, f"Master notebook is missing: {expected}"
+
+    assert "venv.EnvBuilder" not in master_text
 
     for cell in master["cells"]:
         if cell.get("cell_type") == "code":
