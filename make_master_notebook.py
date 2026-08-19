@@ -223,11 +223,19 @@ else:
 """
             ),
             code(
-                f"""run_project_module(
-    "src.train",
+                f"""# Run directly so an internal NeMo traceback is shown in this cell,
+# rather than being hidden behind a generic CalledProcessError.
+train_command = [
+    str(VENV_PYTHON), "-m", "src.train",
     "--config", "{CONFIG}",
     "--manifest", "{MANIFEST}",
-)
+]
+train_result = subprocess.run(train_command, cwd=PROJECT_DIR, env=os.environ.copy())
+if train_result.returncode:
+    raise RuntimeError(
+        "PC v4 training stopped. The complete NeMo error is printed immediately above; "
+        "do not rerun blindly."
+    )
 """
             ),
             code(
