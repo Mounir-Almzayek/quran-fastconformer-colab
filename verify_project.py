@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 
 def main() -> None:
     config_source = (ROOT / "configs" / "fastconformer_quran.yaml").read_text(encoding="utf-8")
-    pc_v3_config_source = (ROOT / "configs" / "fastconformer_quran_pc_v3_ctc_only.yaml").read_text(encoding="utf-8")
+    pc_v4_config_source = (ROOT / "configs" / "fastconformer_quran_pc_v4_encoder_probe.yaml").read_text(encoding="utf-8")
     legacy_config_source = (ROOT / "configs" / "fastconformer_quran_pcd_legacy.yaml").read_text(encoding="utf-8")
     for expected in (
         "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0",
@@ -35,12 +35,14 @@ def main() -> None:
     ):
         assert expected in config_source, f"Missing PC experiment setting: {expected}"
     for expected in (
-        "artifacts_dir: artifacts/experiments/fastconformer_pc_v3_ctc_only",
-        "training_objective: ctc_only",
+        "artifacts_dir: artifacts/experiments/fastconformer_pc_v4_encoder_probe",
+        "training_objective: encoder_only_hybrid",
         "monitor_metric: val_wer_ctc",
-        "gradient_clip_val: 0.5",
+        "encoder_layers: top_1",
+        "max_steps: 100",
+        "maximum_ctc_wer: 0.10",
     ):
-        assert expected in pc_v3_config_source, f"Missing PC v3 setting: {expected}"
+        assert expected in pc_v4_config_source, f"Missing PC v4 setting: {expected}"
     assert "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0" in legacy_config_source
     assert (ROOT / "configs" / "fastconformer_quran_pc_v1_archived.yaml").is_file()
 
@@ -68,7 +70,7 @@ def main() -> None:
     assert "numpy==1.26.4" in requirements
 
     expected_notebooks = [
-        "00_run_pc_v3_ctc_only_end_to_end.ipynb",
+        "00_run_pc_v4_encoder_probe_end_to_end.ipynb",
         "01_setup.ipynb",
         "02_inspect_everyayah.ipynb",
         "03_prepare_nemo_manifests.ipynb",
@@ -83,13 +85,13 @@ def main() -> None:
         notebook = json.loads((ROOT / "notebooks" / notebook_name).read_text(encoding="utf-8"))
         assert notebook["nbformat"] == 4 and notebook["cells"]
 
-    master = json.loads((ROOT / "notebooks" / "00_run_pc_v3_ctc_only_end_to_end.ipynb").read_text(encoding="utf-8"))
+    master = json.loads((ROOT / "notebooks" / "00_run_pc_v4_encoder_probe_end_to_end.ipynb").read_text(encoding="utf-8"))
     master_text = "\n".join(
         "".join(cell.get("source", "")) if isinstance(cell.get("source", ""), list) else cell.get("source", "")
         for cell in master["cells"]
     )
     for expected in (
-        "only notebook needed for normal execution",
+        "PC v4 safety probe",
         "quran-fastconformer-venv",
         "virtualenv>=20.26,<21",
         "virtualenv\", \"--system-site-packages",
@@ -107,6 +109,7 @@ def main() -> None:
 
     assert "src.baseline" not in master_text
     assert "00_run_pc_v2_end_to_end" not in master_text
+    assert "00_run_pc_v3_ctc_only_end_to_end" not in master_text
     assert "venv.EnvBuilder" not in master_text
 
     for cell in master["cells"]:

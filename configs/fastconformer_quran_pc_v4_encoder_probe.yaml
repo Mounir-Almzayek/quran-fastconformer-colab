@@ -1,0 +1,83 @@
+# PC v4 is a short stability probe after PC v3 collapsed to the unknown token.
+# It reuses the locked PC v2 split and valid baseline, but has independent artifacts.
+project:
+  name: quran-fastconformer-pc-v4-encoder-probe
+  seed: 2419
+  artifacts_dir: artifacts/experiments/fastconformer_pc_v4_encoder_probe
+  manifest_backup_dir: /content/drive/MyDrive/quran-fastconformer-manifest-backups
+  runtime_audio_dir: /content/quran-fastconformer-audio
+
+dataset:
+  name: tarteel-ai/everyayah
+  config: default
+  source_split: train
+  streaming: true
+  target_sampling_rate: 16000
+  min_duration_seconds: 0.3
+  max_duration_seconds: 25.0
+  shuffle_buffer: 1024
+  candidate_pool_size: 30000
+  sample_caps:
+    train: 8000
+    validation: 1000
+    test: 1000
+  reciter_split:
+    strategy: disjoint_reciters
+    minimum_samples_per_holdout_reciter: 1000
+    validation_reciters: 1
+    test_reciters: 1
+    validation_reciter_names: [parhizgar]
+    test_reciter_names: [fares_abbad]
+
+text:
+  target_normalization: quranic_light
+  primary_normalization: canonical
+  diagnostic_normalization: quranic_light
+
+model:
+  pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0
+  decoder: ctc
+  # Keep the pretrained RNNT and CTC branches frozen. The hybrid loss keeps
+  # encoder gradients coherent while only one encoder layer is allowed to adapt.
+  training_objective: encoder_only_hybrid
+  monitor_metric: val_wer_ctc
+  sample_rate: 16000
+
+training:
+  work_dir: artifacts/experiments/fastconformer_pc_v4_encoder_probe/nemo
+  final_model_path: artifacts/experiments/fastconformer_pc_v4_encoder_probe/models/fastconformer-quran-pc-v4-encoder-probe.nemo
+  batch_size: 4
+  validation_batch_size: 4
+  num_workers: 0
+  pin_memory: false
+  checkpoint_every_n_train_steps: 50
+  progress_every_n_train_steps: 25
+  precision: 16-mixed
+  gradient_clip_val: 0.25
+  stages:
+    - name: top_encoder_stability_probe
+      encoder_layers: top_1
+      max_epochs: 1
+      max_steps: 100
+      validation_every_n_steps: 100
+      # 0.10 is ten percent WER as a fraction. The pretrained 32-sample
+      # diagnostic was 2.51%, so this leaves a conservative safety margin.
+      maximum_ctc_wer: 0.10
+      learning_rate: 5.0e-7
+
+reporting:
+  baseline_metrics_file: artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/baseline/metrics.json
+  finetuned_metrics_file: artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/finetuned/metrics.json
+  comparison_dir: artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/comparison
+  representative_examples: 12
+  duration_bins_seconds:
+    - label: short_0_to_10
+      lower: 0.0
+      upper: 10.0
+    - label: medium_10_to_20
+      lower: 10.0
+      upper: 20.0
+    - label: long_20_to_25
+      lower: 20.0
+      upper: 25.000001
+  minimum_group_examples: 5

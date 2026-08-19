@@ -33,8 +33,8 @@ def save(filename: str, cells: list[dict]) -> None:
 
 
 MANIFEST = "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json"
-CONFIG = "configs/fastconformer_quran_pc_v3_ctc_only.yaml"
-EXPERIMENT_ROOT = "artifacts/experiments/fastconformer_pc_v3_ctc_only"
+CONFIG = "configs/fastconformer_quran_pc_v4_encoder_probe.yaml"
+EXPERIMENT_ROOT = "artifacts/experiments/fastconformer_pc_v4_encoder_probe"
 
 
 PROJECT_CELL = '''from pathlib import Path
@@ -113,12 +113,12 @@ print("No Colab restart is required. All project commands below use:", VENV_PYTH
 
 def main() -> None:
     save(
-        "00_run_pc_v3_ctc_only_end_to_end.ipynb",
+        "00_run_pc_v4_encoder_probe_end_to_end.ipynb",
         [
             markdown(
-                """# Quran FastConformer PC v3 CTC-only — one-session Colab workflow
+                """# Quran FastConformer PC v4 encoder-only stability probe — one-session Colab workflow
 
-This is the **only notebook needed for normal execution**. It reuses the locked PC v2 reciter-held-out manifest, creates an isolated project Python environment under `/content`, then runs selected-audio preparation, baseline, restart-safe CTC-only fine-tuning, final evaluation, and comparison in **one GPU session**.
+This notebook runs the **PC v4 safety probe**. It reuses the locked PC v2 reciter-held-out manifest and valid baseline, then performs only 100 guarded encoder-only training steps. It stops automatically before exporting a model if CTC WER exceeds the safety limit.
 
 > Use **Runtime → Run all**. The first run may spend time installing packages into the isolated environment, but it does **not** change Colab's own packages and does **not** require a runtime restart."""
             ),
@@ -143,9 +143,9 @@ subprocess.check_call([str(VENV_PYTHON), "-c", gpu_probe], cwd=PROJECT_DIR)
 """
             ),
             markdown(
-                """## 2. Locked PC v2 manifest reused by PC v3
+                """## 2. Locked PC v2 manifest reused by PC v4
 
-PC v3 deliberately reuses the immutable PC v2 split: validation is **parhizgar** and test is **fares_abbad**. It never creates a new split or changes the held-out reciters."""
+PC v4 deliberately reuses the immutable PC v2 split: validation is **parhizgar** and test is **fares_abbad**. It never creates a new split or changes the held-out reciters."""
             ),
             code(
                 """manifest_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json"
@@ -193,7 +193,7 @@ The valid PC v2 baseline is copied into the PC v3 report area without rerunning 
                 """import shutil
 
 source_baseline = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/baseline"
-target_baseline = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/baseline"
+target_baseline = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/baseline"
 assert (source_baseline / "metrics.json").exists(), f"Valid PC v2 baseline is missing: {source_baseline}"
 target_baseline.parent.mkdir(parents=True, exist_ok=True)
 shutil.copytree(source_baseline, target_baseline, dirs_exist_ok=True)
@@ -201,7 +201,7 @@ print("Reused fixed PC v2 baseline in:", target_baseline)
 """
             ),
             code(
-                """baseline_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/baseline/metrics.json"
+                """baseline_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/baseline/metrics.json"
 baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 print("Baseline test reciter(s):", baseline["held_out_test_reciters"])
 print(f"Canonical WER / CER: {baseline['strict']['wer_percent']:.2f}% / {baseline['strict']['cer_percent']:.2f}%")
@@ -209,12 +209,12 @@ print(f"Lexical WER / CER: {baseline['diagnostic']['wer_percent']:.2f}% / {basel
 """
             ),
             markdown(
-                """## 5. Fine-tuning with recovery checkpoints
+                """## 5. Guarded encoder-only stability probe
 
-A Drive-backed `last.ckpt` is saved every 500 steps. If Colab later disconnects, reopen this notebook, run the environment section, then rerun **only this training cell** to resume the unfinished stage."""
+A Drive-backed `last.ckpt` is saved every 50 steps. The probe runs only 100 steps and checks held-out CTC WER before exporting its model. If the safety guard stops, do not continue to final evaluation; inspect the printed CTC WER first."""
             ),
             code(
-                """state_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/nemo/training_state.json"
+                """state_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/nemo/training_state.json"
 if state_path.exists():
     print("Existing recovery state:")
     print(json.loads(state_path.read_text(encoding="utf-8")))
@@ -231,7 +231,7 @@ else:
 """
             ),
             code(
-                """summary_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/models/training_summary.json"
+                """summary_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/models/training_summary.json"
 if summary_path.exists():
     print(json.loads(summary_path.read_text(encoding="utf-8")))
 else:
@@ -248,7 +248,7 @@ else:
 """
             ),
             code(
-                """final_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/finetuned/metrics.json"
+                """final_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/finetuned/metrics.json"
 final_metrics = json.loads(final_path.read_text(encoding="utf-8"))
 print("Final test reciter(s):", final_metrics["held_out_test_reciters"])
 print(f"Canonical WER / CER: {final_metrics['strict']['wer_percent']:.2f}% / {final_metrics['strict']['cer_percent']:.2f}%")
@@ -260,10 +260,10 @@ print(f"Lexical WER / CER: {final_metrics['diagnostic']['wer_percent']:.2f}% / {
             code(
                 """from IPython.display import Image, display
 
-comparison_dir = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/comparison"
+comparison_dir = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v4_encoder_probe/results/comparison"
 print((comparison_dir / "metrics_comparison.csv").read_text(encoding="utf-8"))
 display(Image(comparison_dir / "metrics_comparison.png"))
-print("PC v3 CTC-only workflow completed.")
+print("PC v4 encoder-only stability probe completed.")
 """
             ),
         ],

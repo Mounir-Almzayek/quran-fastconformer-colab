@@ -227,6 +227,8 @@ def _stage_trainer(
         accelerator="gpu" if use_gpu else "cpu",
         devices=1,
         max_epochs=int(stage["max_epochs"]),
+        max_steps=int(stage.get("max_steps", -1)),
+        val_check_interval=stage.get("validation_every_n_steps", 1.0),
         precision=config["training"]["precision"] if use_gpu else "32-true",
         gradient_clip_val=float(config["training"]["gradient_clip_val"]),
         callbacks=[best_checkpoint, recovery_checkpoint, console],
@@ -252,6 +254,8 @@ def _build_stage_record(
         "encoder_layers": stage["encoder_layers"],
         "max_epochs": int(stage["max_epochs"]),
         "learning_rate": float(stage["learning_rate"]),
+        "max_steps": int(stage.get("max_steps", -1)),
+        "maximum_ctc_wer": stage.get("maximum_ctc_wer"),
         "best_checkpoint": best_checkpoint.best_model_path or None,
         "stage_export": str(stage_export.resolve()),
     }
@@ -323,6 +327,20 @@ def run(config_path: str | Path, manifest_path: str | Path) -> dict[str, Any]:
                 "resume_checkpoint": str(last_checkpoint.resolve()) if last_checkpoint is not None else None,
                 "stages": stage_summaries,
             }
+
+        maximum_ctc_wer = stage.get("maximum_ctc_wer")
+        if maximum_ctc_wer is not None:
+            observed = trainer.callback_metrics.get("val_wer_ctc")
+            if observed is None:
+                raise RuntimeError(
+                    "CTC safety guard could not find val_wer_ctc. Configure a validation interval before exporting this stage."
+                )
+            observed_value = float(observed.detach().cpu() if hasattr(observed, "detach") else observed)
+            if observed_value > float(maximum_ctc_wer):
+                raise RuntimeError(
+                    f"CTC safety guard stopped stage {index}: val_wer_ctc={observed_value:.4f} exceeds "
+                    f"the allowed {float(maximum_ctc_wer):.4f}. No stage model was exported."
+                )
 
         model.save_to(str(stage_export))
         stage_record = _build_stage_record(stage, stage_export, best_checkpoint)

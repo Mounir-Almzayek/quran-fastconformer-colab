@@ -66,7 +66,7 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         if objective == "ctc_only":
             model.cfg.aux_ctc.ctc_loss_weight = 1.0
             model.cfg.compute_eval_loss = False
-        elif objective != "hybrid":
+        elif objective not in {"hybrid", "encoder_only_hybrid"}:
             raise ValueError(f"Unsupported training objective: {objective}")
         # The pretrained checkpoint defaults to tarred training data with a
         # mandatory placeholder path. This project uses ordinary local WAV files.
@@ -128,7 +128,9 @@ def configure_trainable_layers(model: Any, policy: str) -> None:
     encoder_layers = list(getattr(getattr(model, "encoder", None), "layers", []))
     if not encoder_layers:
         raise RuntimeError("The loaded model does not expose encoder.layers required for progressive fine-tuning.")
-    if policy == "top_3":
+    if policy == "top_1":
+        selected_layers = encoder_layers[-1:]
+    elif policy == "top_3":
         selected_layers = encoder_layers[-3:]
     elif policy == "upper_half":
         selected_layers = encoder_layers[len(encoder_layers) // 2 :]
@@ -140,9 +142,16 @@ def configure_trainable_layers(model: Any, policy: str) -> None:
         for parameter in layer.parameters():
             parameter.requires_grad = True
 
-    # A CTC-only experiment must not update the RNNT prediction/joint branch.
+    # CTC-only adapts its CTC head. The diagnostic encoder-only mode keeps both
+    # pretrained output branches immutable so the stability probe cannot overwrite
+    # the healthy CTC vocabulary distribution.
     objective = str(getattr(model, "_quran_training_objective", "hybrid"))
-    decoder_terms = ("ctc",) if objective == "ctc_only" else ("decoder", "joint", "ctc")
+    if objective == "ctc_only":
+        decoder_terms = ("ctc",)
+    elif objective == "encoder_only_hybrid":
+        decoder_terms = ()
+    else:
+        decoder_terms = ("decoder", "joint", "ctc")
     for name, parameter in model.named_parameters():
         if any(term in name.lower() for term in decoder_terms):
             parameter.requires_grad = True
