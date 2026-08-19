@@ -31,6 +31,15 @@ def main() -> None:
     assert "_backup_manifest" in setup_source
     assert "manifest_backup_receipt.json" in setup_source
 
+    guard_source = (ROOT / "update_colab_dependency_guards.py").read_text(encoding="utf-8")
+    ast.parse(guard_source)
+    assert '"numpy==1.26.4"' in guard_source
+    assert '"pandas==2.2.3"' in guard_source
+    assert "binary/import compatibility check failed" in guard_source
+    requirements_source = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "numpy==1.26.4" in requirements_source
+    assert "pandas==2.2.3" in requirements_source
+
     train_path = ROOT / "src" / "train.py"
     train_source = train_path.read_text(encoding="utf-8")
     ast.parse(train_source)

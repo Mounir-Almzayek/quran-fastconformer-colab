@@ -101,7 +101,7 @@ if compatibility_error:
         "--no-cache-dir",
         "--force-reinstall",
         "numpy==1.26.4",
-        "pandas==2.2.2",
+        "pandas==2.2.3",
     ])
     print("Clean NumPy repair completed. Use Runtime → Restart session before running any other cell.")
 elif missing_modules:
