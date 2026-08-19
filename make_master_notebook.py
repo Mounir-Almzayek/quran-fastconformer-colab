@@ -113,7 +113,7 @@ print("No Colab restart is required. All project commands below use:", VENV_PYTH
 
 def main() -> None:
     save(
-        "00_run_pc_v2_end_to_end.ipynb",
+        "00_run_pc_v3_ctc_only_end_to_end.ipynb",
         [
             markdown(
                 """# Quran FastConformer PC v3 CTC-only — one-session Colab workflow

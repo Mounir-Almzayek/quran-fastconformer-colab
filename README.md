@@ -1,6 +1,6 @@
 # Quran FastConformer ASR Fine-tuning on Google Colab
 
-This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. Its default experiment is **PC v2**, a fresh reproducible run after earlier Drive artifacts were permanently deleted. It starts from NVIDIA’s Arabic punctuation-aware FastConformer PC checkpoint, retains its pretrained BPE tokenizer, selects CTC decoding, and adapts the model to Quranic recitation with NVIDIA NeMo. Previous PCD and PC configurations are retained only as archived references.
+This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. Its active experiment is **PC v3 CTC-only**, which reuses the locked PC v2 split and valid baseline while isolating the collapsed PC v2 fine-tuning artifacts. It starts from NVIDIA’s Arabic punctuation-aware FastConformer PC checkpoint, retains its pretrained BPE tokenizer, uses CTC decoding, and trains the CTC branch directly with NVIDIA NeMo. Previous PCD and PC configurations are retained only as archived references.
 
 > This repository deliberately implements only **Stage 1: Quran ASR domain adaptation**. It does not claim to measure phoneme, tajweed, or mispronunciation metrics that lack the required labels. Those later capabilities need a separate alignment/pronunciation pipeline.
 
@@ -36,7 +36,8 @@ The created manifest records the held-out identities and fails if a reciter cros
 ```text
 quran-fastconformer-colab/
 ├── configs/
-│   ├── fastconformer_quran.yaml             # Default independent PC experiment
+│   ├── fastconformer_quran.yaml             # Locked PC v2 split/baseline configuration
+│   ├── fastconformer_quran_pc_v3_ctc_only.yaml # Active CTC-only fine-tuning configuration
 │   ├── fastconformer_quran_pcd_legacy.yaml  # Preserved prior PCD configuration
 │   ├── fastconformer_quran_pc_v1_archived.yaml # Archived pre-deletion PC setup
 │   └── evaluation_matrix.yaml                # Reportable metric contract
@@ -64,17 +65,17 @@ quran-fastconformer-colab/
 
 ## Primary one-session run in Colab
 
-Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastconformer-colab`. Select **Runtime → Change runtime type → GPU**, then open **`notebooks/00_run_pc_v2_end_to_end.ipynb`**. It is the normal execution path and keeps setup, data preparation, baseline, fine-tuning, evaluation, and comparison inside one Colab runtime.
+Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastconformer-colab`. Select **Runtime → Change runtime type → GPU**, then open **`notebooks/00_run_pc_v3_ctc_only_end_to_end.ipynb`**. It is the only normal execution path and keeps setup, selected-audio preparation, fixed baseline reuse, CTC-only fine-tuning, evaluation, and comparison inside one Colab runtime.
 
-> The unified notebook installs the project's dependencies into `/content/quran-fastconformer-venv`, separate from Colab's own Python packages. Select a GPU and use **Runtime → Run all**; no manual pip cell and no runtime restart are required during normal PC v2 execution. Do not manually switch among numbered notebooks.
+> The unified notebook installs the project's dependencies into `/content/quran-fastconformer-venv`, separate from Colab's own Python packages. Select a GPU and use **Runtime → Run all**; no manual pip cell and no runtime restart are required during normal PC v3 execution. Do not manually switch among numbered notebooks. The old PC v2 unified notebook is intentionally removed, so no collapsed checkpoint can be reused by mistake.
 
 ## Numbered notebooks: reference and recovery only
 
-The numbered notebooks remain available for inspection or targeted recovery, but they are not required for normal execution of PC v2.
+The numbered notebooks remain available for inspection or targeted recovery, but they are not required for normal execution of PC v3.
 
 | Notebook | Purpose | Main output |
 |---|---|---|
-| `00_run_pc_v2_end_to_end` | **Primary one-session PC v2 workflow**: environment, manifest, audio, baseline, training, evaluation, comparison | Complete PC v2 experiment in one runtime |
+| `00_run_pc_v3_ctc_only_end_to_end` | **Primary one-session PC v3 workflow**: environment, locked manifest reuse, audio, fixed baseline reuse, CTC-only training, evaluation, comparison | Complete PC v3 experiment in one runtime |
 | `01_setup` | Mounts Drive, installs NeMo, checks the schema, and creates the immutable **PC v2** manifest with two backup copies | `artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json` |
 | `02_inspect_everyayah` | Inspects a few real streamed rows | Schema confirmation |
 | `03_prepare_nemo_manifests` | Reuses the locked PC v2 split, downloads only selected clips into a local Colab WAV cache, and writes PC v2 Drive-backed NeMo JSONL files | `artifacts/experiments/fastconformer_pc_v2/nemo/manifests/` |
