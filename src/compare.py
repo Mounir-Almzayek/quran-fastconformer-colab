@@ -43,6 +43,29 @@ def _metric_rows(baseline: dict[str, Any], finetuned: dict[str, Any]) -> list[di
     return rows
 
 
+def _require_completed_finetuning(paths: dict[str, Path], finetuned: dict[str, Any]) -> None:
+    """Reject stale or placeholder results instead of rendering a misleading comparison."""
+    summary_path = paths["model"].parent / "training_summary.json"
+    if not summary_path.is_file():
+        raise FileNotFoundError(
+            "Fine-tuning has not completed: training_summary.json is missing. "
+            "Run the PC v2 training stage before final evaluation and comparison."
+        )
+    summary = read_json(summary_path)
+    if summary.get("status") != "complete":
+        raise RuntimeError("Fine-tuning is not complete. Resume the training stage before comparison.")
+    final_model = Path(summary.get("final_model", "")).resolve()
+    expected_model = paths["model"].resolve()
+    evaluated_model = Path(finetuned.get("model", "")).resolve()
+    if final_model != expected_model or evaluated_model != expected_model:
+        raise RuntimeError(
+            "Fine-tuned metrics do not belong to the completed PC v2 final model. "
+            "Re-run final evaluation after training completes."
+        )
+    if finetuned.get("stage") != "finetuned":
+        raise RuntimeError("Fine-tuned metrics have an invalid stage label. Re-run final evaluation.")
+
+
 def _draw_main_chart(rows: list[dict[str, Any]], destination: Path) -> None:
     """Render the four global error rates with legible protocol labels."""
     labels = [f"{row['protocol']}\n{row['metric']}" for row in rows]
@@ -183,6 +206,7 @@ def run(config_path: str | Path) -> dict[str, Any]:
     finetuned_path = Path(config["_project_root"]) / reporting["finetuned_metrics_file"]
     baseline = read_json(baseline_path)
     finetuned = read_json(finetuned_path)
+    _require_completed_finetuning(paths, finetuned)
 
     if baseline["manifest_path"] != finetuned["manifest_path"]:
         raise RuntimeError("The baseline and fine-tuned results were produced from different manifests.")

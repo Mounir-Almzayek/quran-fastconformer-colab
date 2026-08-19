@@ -40,6 +40,13 @@ def main() -> None:
     assert "current_pipeline: fastconformer_quran_text_asr" in contract_source
     assert "primary_test_policy: locked_disjoint_reciter_manifest" in contract_source
 
+    compare_source = (ROOT / "src" / "compare.py").read_text(encoding="utf-8")
+    evaluate_source = (ROOT / "src" / "evaluate.py").read_text(encoding="utf-8")
+    assert "_require_completed_finetuning" in compare_source
+    assert "training_summary.json" in compare_source
+    assert "training_summary.json" in evaluate_source
+    assert "Fine-tuning is not complete" in evaluate_source
+
     for source in sorted((ROOT / "src").glob("*.py")):
         ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
     for script_name in ("run_colab_setup.py", "make_notebooks.py", "make_master_notebook.py", "update_colab_dependency_guards.py"):

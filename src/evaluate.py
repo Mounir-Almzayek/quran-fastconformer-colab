@@ -29,6 +29,18 @@ def run(config_path: str | Path, manifest_path: str | Path, model_path: str | Pa
     paths = ensure_project_dirs(config)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     resolved_model = Path(model_path) if model_path else paths["model"]
+    summary_path = paths["model"].parent / "training_summary.json"
+    if not summary_path.is_file():
+        raise FileNotFoundError(
+            "Fine-tuning has not completed: training_summary.json is missing. "
+            "Run or resume src.train before final evaluation."
+        )
+    training_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if training_summary.get("status") != "complete":
+        raise RuntimeError("Fine-tuning is not complete. Resume src.train before final evaluation.")
+    expected_model = Path(training_summary.get("final_model", ""))
+    if expected_model.resolve() != resolved_model.resolve():
+        raise RuntimeError("Requested evaluation model does not match the completed PC v2 final model.")
     if not resolved_model.is_file():
         raise FileNotFoundError(f"Fine-tuned NeMo file not found: {resolved_model}")
     local_manifests = ensure_nemo_audio_cache(config, manifest, Path(config["_project_root"]))
