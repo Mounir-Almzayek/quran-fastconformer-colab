@@ -1,0 +1,87 @@
+# PC v3 repairs the collapsed PC v2 run. It reuses the locked PC v2 manifest,
+# but isolates all models, checkpoints, and reports under a new experiment root.
+project:
+  name: quran-fastconformer-pc-v3-ctc-only
+  seed: 2419
+  artifacts_dir: artifacts/experiments/fastconformer_pc_v3_ctc_only
+  manifest_backup_dir: /content/drive/MyDrive/quran-fastconformer-manifest-backups
+  runtime_audio_dir: /content/quran-fastconformer-audio
+
+dataset:
+  name: tarteel-ai/everyayah
+  config: default
+  source_split: train
+  streaming: true
+  target_sampling_rate: 16000
+  min_duration_seconds: 0.3
+  max_duration_seconds: 25.0
+  shuffle_buffer: 1024
+  candidate_pool_size: 30000
+  sample_caps:
+    train: 8000
+    validation: 1000
+    test: 1000
+  reciter_split:
+    strategy: disjoint_reciters
+    minimum_samples_per_holdout_reciter: 1000
+    validation_reciters: 1
+    test_reciters: 1
+    validation_reciter_names: [parhizgar]
+    test_reciter_names: [fares_abbad]
+
+text:
+  target_normalization: quranic_light
+  primary_normalization: canonical
+  diagnostic_normalization: quranic_light
+
+model:
+  pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0
+  decoder: ctc
+  # change_decoding_strategy controls inference only. This forces hybrid loss to
+  # CTC-only and freezes the RNNT predictor/joint so the evaluated branch is stable.
+  training_objective: ctc_only
+  monitor_metric: val_wer_ctc
+  sample_rate: 16000
+
+training:
+  work_dir: artifacts/experiments/fastconformer_pc_v3_ctc_only/nemo
+  final_model_path: artifacts/experiments/fastconformer_pc_v3_ctc_only/models/fastconformer-quran-pc-v3-ctc-only.nemo
+  batch_size: 4
+  validation_batch_size: 4
+  num_workers: 0
+  pin_memory: false
+  checkpoint_every_n_train_steps: 500
+  progress_every_n_train_steps: 100
+  precision: 16-mixed
+  gradient_clip_val: 0.5
+  # Lower learning rates and only one epoch per stage protect pretrained CTC output.
+  stages:
+    - name: top_encoder_and_ctc
+      encoder_layers: top_3
+      max_epochs: 1
+      learning_rate: 5.0e-6
+    - name: upper_encoder_and_ctc
+      encoder_layers: upper_half
+      max_epochs: 1
+      learning_rate: 2.0e-6
+    - name: full_model
+      encoder_layers: all
+      max_epochs: 1
+      learning_rate: 5.0e-7
+
+reporting:
+  baseline_metrics_file: artifacts/experiments/fastconformer_pc_v3_ctc_only/results/baseline/metrics.json
+  finetuned_metrics_file: artifacts/experiments/fastconformer_pc_v3_ctc_only/results/finetuned/metrics.json
+  comparison_dir: artifacts/experiments/fastconformer_pc_v3_ctc_only/results/comparison
+  representative_examples: 12
+  duration_bins_seconds:
+    - label: short_0_to_10
+      lower: 0.0
+      upper: 10.0
+    - label: medium_10_to_20
+      lower: 10.0
+      upper: 20.0
+    - label: long_20_to_25
+      lower: 20.0
+      upper: 25.000001
+  minimum_group_examples: 5

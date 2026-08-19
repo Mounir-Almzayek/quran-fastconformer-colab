@@ -33,6 +33,8 @@ def save(filename: str, cells: list[dict]) -> None:
 
 
 MANIFEST = "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json"
+CONFIG = "configs/fastconformer_quran_pc_v3_ctc_only.yaml"
+EXPERIMENT_ROOT = "artifacts/experiments/fastconformer_pc_v3_ctc_only"
 
 
 PROJECT_CELL = '''from pathlib import Path
@@ -114,9 +116,9 @@ def main() -> None:
         "00_run_pc_v2_end_to_end.ipynb",
         [
             markdown(
-                """# Quran FastConformer PC v2 — one-session Colab workflow
+                """# Quran FastConformer PC v3 CTC-only — one-session Colab workflow
 
-This is the **only notebook needed for normal execution**. It creates an isolated project Python environment under `/content`, then runs the immutable split, selected-audio preparation, baseline, restart-safe fine-tuning, final evaluation, and comparison in **one GPU session**.
+This is the **only notebook needed for normal execution**. It reuses the locked PC v2 reciter-held-out manifest, creates an isolated project Python environment under `/content`, then runs selected-audio preparation, baseline, restart-safe CTC-only fine-tuning, final evaluation, and comparison in **one GPU session**.
 
 > Use **Runtime → Run all**. The first run may spend time installing packages into the isolated environment, but it does **not** change Colab's own packages and does **not** require a runtime restart."""
             ),
@@ -141,12 +143,14 @@ subprocess.check_call([str(VENV_PYTHON), "-c", gpu_probe], cwd=PROJECT_DIR)
 """
             ),
             markdown(
-                """## 2. Immutable PC v2 manifest
+                """## 2. Locked PC v2 manifest reused by PC v3
 
-This cell creates the manifest only if it does not already exist. Validation is fixed to **parhizgar** and test is fixed to **fares_abbad**. Two immutable backup copies are written automatically."""
+PC v3 deliberately reuses the immutable PC v2 split: validation is **parhizgar** and test is **fares_abbad**. It never creates a new split or changes the held-out reciters."""
             ),
             code(
-                """run_project_script("run_colab_setup.py", "--config", "configs/fastconformer_quran.yaml")
+                """manifest_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json"
+assert manifest_path.exists(), f"Locked PC v2 manifest missing: {manifest_path}"
+print("Reusing locked manifest:", manifest_path)
 """
             ),
             code(
@@ -174,27 +178,30 @@ Only the 8,000/1,000/1,000 selected clips are materialized. Audio cache stays lo
             code(
                 f"""run_project_script(
     "run_colab_setup.py",
-    "--config", "configs/fastconformer_quran.yaml",
+    "--config", "{CONFIG}",
     "--manifest", "{MANIFEST}",
     "--materialize",
 )
 """
             ),
             markdown(
-                """## 4. Baseline before adaptation
+                """## 4. Fixed baseline before adaptation
 
-Canonical metrics retain diacritics. Lexical metrics are the primary fair measure for PC because this backbone does not emit diacritics."""
+The valid PC v2 baseline is copied into the PC v3 report area without rerunning inference. Canonical metrics retain diacritics; lexical metrics are the primary fair measure for this non-diacritized backbone."""
             ),
             code(
-                f"""run_project_module(
-    "src.baseline",
-    "--config", "configs/fastconformer_quran.yaml",
-    "--manifest", "{MANIFEST}",
-)
+                """import shutil
+
+source_baseline = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/baseline"
+target_baseline = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/baseline"
+assert (source_baseline / "metrics.json").exists(), f"Valid PC v2 baseline is missing: {source_baseline}"
+target_baseline.parent.mkdir(parents=True, exist_ok=True)
+shutil.copytree(source_baseline, target_baseline, dirs_exist_ok=True)
+print("Reused fixed PC v2 baseline in:", target_baseline)
 """
             ),
             code(
-                """baseline_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/baseline/metrics.json"
+                """baseline_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/baseline/metrics.json"
 baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 print("Baseline test reciter(s):", baseline["held_out_test_reciters"])
 print(f"Canonical WER / CER: {baseline['strict']['wer_percent']:.2f}% / {baseline['strict']['cer_percent']:.2f}%")
@@ -207,7 +214,7 @@ print(f"Lexical WER / CER: {baseline['diagnostic']['wer_percent']:.2f}% / {basel
 A Drive-backed `last.ckpt` is saved every 500 steps. If Colab later disconnects, reopen this notebook, run the environment section, then rerun **only this training cell** to resume the unfinished stage."""
             ),
             code(
-                """state_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/nemo/training_state.json"
+                """state_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/nemo/training_state.json"
 if state_path.exists():
     print("Existing recovery state:")
     print(json.loads(state_path.read_text(encoding="utf-8")))
@@ -218,13 +225,13 @@ else:
             code(
                 f"""run_project_module(
     "src.train",
-    "--config", "configs/fastconformer_quran.yaml",
+    "--config", "{CONFIG}",
     "--manifest", "{MANIFEST}",
 )
 """
             ),
             code(
-                """summary_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/models/training_summary.json"
+                """summary_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/models/training_summary.json"
 if summary_path.exists():
     print(json.loads(summary_path.read_text(encoding="utf-8")))
 else:
@@ -235,28 +242,28 @@ else:
             code(
                 f"""run_project_module(
     "src.evaluate",
-    "--config", "configs/fastconformer_quran.yaml",
+    "--config", "{CONFIG}",
     "--manifest", "{MANIFEST}",
 )
 """
             ),
             code(
-                """final_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/finetuned/metrics.json"
+                """final_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/finetuned/metrics.json"
 final_metrics = json.loads(final_path.read_text(encoding="utf-8"))
 print("Final test reciter(s):", final_metrics["held_out_test_reciters"])
 print(f"Canonical WER / CER: {final_metrics['strict']['wer_percent']:.2f}% / {final_metrics['strict']['cer_percent']:.2f}%")
 print(f"Lexical WER / CER: {final_metrics['diagnostic']['wer_percent']:.2f}% / {final_metrics['diagnostic']['cer_percent']:.2f}%")
 """
             ),
-            code("""run_project_module("src.compare", "--config", "configs/fastconformer_quran.yaml")
+            code(f"""run_project_module("src.compare", "--config", "{CONFIG}")
 """),
             code(
                 """from IPython.display import Image, display
 
-comparison_dir = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/comparison"
+comparison_dir = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v3_ctc_only/results/comparison"
 print((comparison_dir / "metrics_comparison.csv").read_text(encoding="utf-8"))
 display(Image(comparison_dir / "metrics_comparison.png"))
-print("PC v2 workflow completed.")
+print("PC v3 CTC-only workflow completed.")
 """
             ),
         ],

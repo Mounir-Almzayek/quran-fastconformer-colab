@@ -60,6 +60,14 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
         # Hybrid NeMo models otherwise emit reference/prediction pairs for the
         # RNNT diagnostic metric during validation, overwhelming the Colab log.
         model.cfg.log_prediction = False
+        # Selecting CTC decoding controls inference only. For an experiment that
+        # evaluates CTC, set the hybrid training loss to CTC-only as well.
+        objective = str(config["model"].get("training_objective", "hybrid"))
+        if objective == "ctc_only":
+            model.cfg.aux_ctc.ctc_loss_weight = 1.0
+            model.cfg.compute_eval_loss = False
+        elif objective != "hybrid":
+            raise ValueError(f"Unsupported training objective: {objective}")
         # The pretrained checkpoint defaults to tarred training data with a
         # mandatory placeholder path. This project uses ordinary local WAV files.
         model.cfg.train_ds.is_tarred = False
@@ -96,6 +104,10 @@ def attach_manifests(model: Any, train_manifest: Path, validation_manifest: Path
     model.setup_validation_data(model.cfg.validation_ds)
     model.setup_test_data(model.cfg.test_ds)
 
+    model._quran_training_objective = str(config["model"].get("training_objective", "hybrid"))
+    if model._quran_training_objective == "ctc_only":
+        model.ctc_loss_weight = 1.0
+
     # These metrics are created while the pretrained model is restored, before
     # the project config is attached. Update the live objects as well as cfg.
     for metric_name in ("wer", "ctc_wer"):
@@ -128,8 +140,9 @@ def configure_trainable_layers(model: Any, policy: str) -> None:
         for parameter in layer.parameters():
             parameter.requires_grad = True
 
-    # Adapt decoder-side components so Quranic orthography can move even in the first stage.
-    decoder_terms = ("decoder", "joint", "ctc")
+    # A CTC-only experiment must not update the RNNT prediction/joint branch.
+    objective = str(getattr(model, "_quran_training_objective", "hybrid"))
+    decoder_terms = ("ctc",) if objective == "ctc_only" else ("decoder", "joint", "ctc")
     for name, parameter in model.named_parameters():
         if any(term in name.lower() for term in decoder_terms):
             parameter.requires_grad = True

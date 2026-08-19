@@ -181,7 +181,7 @@ def _compact_console_callback(pl: Any, stage_dir: Path, stage_index: int, total_
                 f"[validation] stage {stage_index}/{total_stages} | "
                 f"loss={_metric_text(metrics, 'val_loss')} | "
                 f"rnnt_wer={_metric_text(metrics, 'val_wer')} | "
-                f"ctc_wer={_metric_text(metrics, 'val_ctc_wer')}"
+                f"ctc_wer={_metric_text(metrics, 'val_wer_ctc')}"
             )
 
         def on_exception(self, trainer: Any, pl_module: Any, exception: BaseException) -> None:
@@ -205,10 +205,11 @@ def _stage_trainer(
 ) -> tuple[Any, Any, Any]:
     """Create one trainer with clean progress output and frequent Drive recovery checkpoints."""
     pl, _, _ = import_nemo()
+    monitor_metric = str(config["model"].get("monitor_metric", "val_wer"))
     best_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=str(stage_dir),
-        filename="best-{epoch:02d}-{val_wer:.4f}",
-        monitor="val_wer",
+        filename="best-{epoch:02d}-{step:06d}",
+        monitor=monitor_metric,
         mode="min",
         save_top_k=1,
     )
