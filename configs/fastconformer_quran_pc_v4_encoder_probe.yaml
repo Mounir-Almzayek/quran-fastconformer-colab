@@ -58,8 +58,10 @@ training:
     - name: top_encoder_stability_probe
       encoder_layers: top_1
       max_epochs: 1
-      max_steps: 100
-      validation_every_n_steps: 100
+      # Limit one epoch to 100 batches so Lightning always runs validation at
+      # the epoch boundary before the CTC safety guard decides on export.
+      limit_train_batches: 100
+      validation_every_n_steps: 1.0
       # 0.10 is ten percent WER as a fraction. The pretrained 32-sample
       # diagnostic was 2.51%, so this leaves a conservative safety margin.
       maximum_ctc_wer: 0.10

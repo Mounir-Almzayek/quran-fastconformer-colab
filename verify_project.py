@@ -39,7 +39,7 @@ def main() -> None:
         "training_objective: encoder_only_hybrid",
         "monitor_metric: val_wer_ctc",
         "encoder_layers: top_1",
-        "max_steps: 100",
+        "limit_train_batches: 100",
         "maximum_ctc_wer: 0.10",
     ):
         assert expected in pc_v4_config_source, f"Missing PC v4 setting: {expected}"
