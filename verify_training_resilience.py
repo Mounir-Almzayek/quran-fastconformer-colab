@@ -44,8 +44,9 @@ def main() -> None:
     train_source = train_path.read_text(encoding="utf-8")
     ast.parse(train_source)
     for expected in (
-        "save_on_exception=True",
         "every_n_train_steps=_checkpoint_interval(config)",
+        "trainer.save_checkpoint(str(checkpoint_path))",
+        "saved interruption checkpoint",
         "trainer.fit(model, ckpt_path=",
         "training_state.json",
         "stage_complete.json",
@@ -57,6 +58,8 @@ def main() -> None:
         "[validation] stage",
     ):
         assert expected in train_source, f"Missing recovery behavior: {expected}"
+
+    assert "save_on_exception=True" not in train_source
 
     nemo_source = (ROOT / "src" / "nemo_utils.py").read_text(encoding="utf-8")
     ast.parse(nemo_source)

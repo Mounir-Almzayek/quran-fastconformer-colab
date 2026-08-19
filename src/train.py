@@ -185,6 +185,12 @@ def _compact_console_callback(pl: Any, stage_dir: Path, stage_index: int, total_
             )
 
         def on_exception(self, trainer: Any, pl_module: Any, exception: BaseException) -> None:
+            checkpoint_path = stage_dir / "last.ckpt"
+            try:
+                trainer.save_checkpoint(str(checkpoint_path))
+                print(f"[recovery] saved interruption checkpoint → {checkpoint_path}")
+            except Exception as save_error:
+                print(f"[recovery] checkpoint-on-exception unavailable: {type(save_error).__name__}")
             print(f"[recovery] training interrupted: {type(exception).__name__}. Re-run the same command to resume.")
 
     return CompactConsoleReporter()
@@ -212,7 +218,6 @@ def _stage_trainer(
         monitor=None,
         save_top_k=0,
         save_last=True,
-        save_on_exception=True,
         every_n_train_steps=_checkpoint_interval(config),
     )
     console = _compact_console_callback(pl, stage_dir, stage_index, total_stages, stage, config)
