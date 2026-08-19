@@ -11,7 +11,7 @@ from src.baseline import _predict
 from src.common import ensure_project_dirs, load_config, set_seed, utc_now, write_json
 from src.data import ensure_nemo_audio_cache, load_nemo_manifest
 from src.metrics import build_metrics
-from src.nemo_utils import load_exported_ctc_model, load_pretrained_ctc_model
+from src.nemo_utils import configure_compact_nemo_logging, load_exported_ctc_model, load_pretrained_ctc_model
 
 
 def _describe_predictions(rows: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
@@ -47,6 +47,7 @@ def _model_state(model: Any) -> dict[str, Any]:
 def run(config_path: str | Path, manifest_path: str | Path, limit: int) -> dict[str, Any]:
     """Evaluate a small fixed held-out slice on the pretrained model and each saved stage export."""
     config = load_config(config_path)
+    configure_compact_nemo_logging()
     set_seed(int(config["project"]["seed"]))
     paths = ensure_project_dirs(config)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -82,7 +83,7 @@ def run(config_path: str | Path, manifest_path: str | Path, limit: int) -> dict[
         }
         del model
 
-    destination = paths["results"] / "diagnostics" / "ctc_stage_probe.json"
+    destination = paths["artifacts"] / "results" / "diagnostics" / "ctc_stage_probe.json"
     write_json(report, destination)
     report["report_path"] = str(destination.resolve())
     return report
