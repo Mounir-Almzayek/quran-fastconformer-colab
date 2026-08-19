@@ -66,7 +66,7 @@ quran-fastconformer-colab/
 
 Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastconformer-colab`. Select **Runtime → Change runtime type → GPU**, then open **`notebooks/00_run_pc_v2_end_to_end.ipynb`**. It is the normal execution path and keeps setup, data preparation, baseline, fine-tuning, evaluation, and comparison inside one Colab runtime.
 
-> On the first use, run the environment cells first. If the dependency guard asks for a runtime restart, restart once and then use **Runtime → Run all** from the top. Do not manually switch among numbered notebooks during the normal PC v2 workflow.
+> The unified notebook installs the project's dependencies into `/content/quran-fastconformer-venv`, separate from Colab's own Python packages. Select a GPU and use **Runtime → Run all**; no manual pip cell and no runtime restart are required during normal PC v2 execution. Do not manually switch among numbered notebooks.
 
 ## Numbered notebooks: reference and recovery only
 

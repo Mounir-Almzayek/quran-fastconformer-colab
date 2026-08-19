@@ -75,15 +75,28 @@ def main() -> None:
     )
     for expected in (
         "only notebook needed for normal execution",
-        "QURAN_COLAB_RESTART_REQUIRED",
-        "run_colab_setup.py --config configs/fastconformer_quran.yaml",
+        "quran-fastconformer-venv",
+        "run_project_script",
+        "run_project_module",
+        "No Colab restart is required",
+        "run_project_script(\"run_colab_setup.py\"",
         "--materialize",
-        "python -m src.baseline",
-        "python -m src.train",
-        "python -m src.evaluate",
-        "python -m src.compare",
+        "src.baseline",
+        "src.train",
+        "src.evaluate",
+        "src.compare",
     ):
         assert expected in master_text, f"Master notebook is missing: {expected}"
+
+    for cell in master["cells"]:
+        if cell.get("cell_type") == "code":
+            source = cell.get("source", "")
+            source = "".join(source) if isinstance(source, list) else source
+            python_source = "\n".join(
+                line for line in source.splitlines() if not line.lstrip().startswith("!")
+            )
+            if python_source.strip():
+                ast.parse(python_source)
 
     assert (ROOT / "docs" / "EVALUATION_MATRIX.md").is_file()
     assert not (ROOT / "configs" / "whisper_base.yaml").exists()

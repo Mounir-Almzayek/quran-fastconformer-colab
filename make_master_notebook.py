@@ -1,11 +1,105 @@
-"""Generate the single-session Colab notebook for the FastConformer PC v2 workflow."""
+"""Generate the restart-free single-session Colab notebook for FastConformer PC v2."""
 
 from __future__ import annotations
 
-from make_notebooks import DEPENDENCY_GUARD_CELL, PROJECT_CELL, code, markdown, save
+
+def markdown(text: str) -> dict:
+    return {"cell_type": "markdown", "metadata": {}, "source": text}
+
+
+def code(text: str) -> dict:
+    return {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": text}
+
+
+def save(filename: str, cells: list[dict]) -> None:
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent
+    payload = {
+        "cells": cells,
+        "metadata": {
+            "colab": {"provenance": [], "include_colab_link": True},
+            "kernelspec": {"display_name": "Python 3", "name": "python3"},
+            "language_info": {"name": "python"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    (root / "notebooks" / filename).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 MANIFEST = "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json"
+
+
+PROJECT_CELL = '''from pathlib import Path
+import os
+
+from google.colab import drive
+DRIVE_ROOT = Path("/content/drive/MyDrive")
+if not DRIVE_ROOT.exists():
+    drive.mount("/content/drive")
+
+PROJECT_DIR = DRIVE_ROOT / "quran-fastconformer-colab"
+assert PROJECT_DIR.exists(), f"Project directory not found: {PROJECT_DIR}"
+os.chdir(PROJECT_DIR)
+print("Working directory:", PROJECT_DIR)
+'''
+
+
+VENV_CELL = '''from pathlib import Path
+import hashlib
+import os
+import subprocess
+import sys
+import venv
+
+# Keep project dependencies separate from Colab's preinstalled Python packages.
+# This prevents NumPy 1.26.4 (required by NeMo) from replacing Colab's own
+# NumPy stack, so no runtime restart is needed after package installation.
+VENV_DIR = Path("/content/quran-fastconformer-venv")
+VENV_PYTHON = VENV_DIR / "bin" / "python"
+REQUIREMENTS = PROJECT_DIR / "requirements.txt"
+MARKER = VENV_DIR / ".requirements_sha256"
+requirements_hash = hashlib.sha256(REQUIREMENTS.read_bytes()).hexdigest()
+
+if not VENV_PYTHON.exists():
+    print("Creating isolated project environment...")
+    venv.EnvBuilder(with_pip=True, system_site_packages=True).create(VENV_DIR)
+    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+
+if not MARKER.exists() or MARKER.read_text(encoding="utf-8").strip() != requirements_hash:
+    print("Installing project dependencies into the isolated environment. This runs once per fresh Colab runtime...")
+    subprocess.check_call([
+        str(VENV_PYTHON), "-m", "pip", "install", "--no-cache-dir", "-r", str(REQUIREMENTS)
+    ])
+    MARKER.write_text(requirements_hash + "\\n", encoding="utf-8")
+else:
+    print("Isolated project environment is already ready.")
+
+
+def run_project_script(script: str, *arguments: str) -> None:
+    subprocess.check_call(
+        [str(VENV_PYTHON), str(PROJECT_DIR / script), *arguments],
+        cwd=PROJECT_DIR,
+        env=os.environ.copy(),
+    )
+
+
+def run_project_module(module: str, *arguments: str) -> None:
+    subprocess.check_call(
+        [str(VENV_PYTHON), "-m", module, *arguments],
+        cwd=PROJECT_DIR,
+        env=os.environ.copy(),
+    )
+
+probe = "import jiwer, nemo, numpy, pandas, datasets; print('VENV READY', numpy.__version__, pandas.__version__)"
+subprocess.check_call([str(VENV_PYTHON), "-c", probe], cwd=PROJECT_DIR)
+print("No Colab restart is required. All project commands below use:", VENV_PYTHON)
+'''
 
 
 def main() -> None:
@@ -13,170 +107,149 @@ def main() -> None:
         "00_run_pc_v2_end_to_end.ipynb",
         [
             markdown(
-                """# Quran FastConformer PC v2 — complete Colab workflow
+                """# Quran FastConformer PC v2 — one-session Colab workflow
 
-This is the **only notebook needed for normal execution**. It keeps setup, immutable split creation, audio preparation, baseline, restart-safe fine-tuning, final evaluation, and comparison in **one GPU runtime**.
+This is the **only notebook needed for normal execution**. It creates an isolated project Python environment under `/content`, then runs the immutable split, selected-audio preparation, baseline, restart-safe fine-tuning, final evaluation, and comparison in **one GPU session**.
 
-> **First use only:** run the setup cells through **Dependency guard**. If it asks for a runtime restart, restart once and then use **Runtime → Run all** from the top. After the guard reports compatibility, do not move to the old numbered notebooks."""
-            ),
-            code(
-                """from google.colab import drive
-drive.mount(\"/content/drive\")
-"""
+> Use **Runtime → Run all**. The first run may spend time installing packages into the isolated environment, but it does **not** change Colab's own packages and does **not** require a runtime restart."""
             ),
             code(PROJECT_CELL),
             code(
-                """# Keep this Drive copy synchronized with the tested GitHub revision.
-# artifacts/ is excluded so manifests, checkpoints, models, and results remain intact.
+                """# Sync code only. artifacts/ remains untouched.
 !git fetch origin main
 !git reset --hard origin/main
 !git clean -fd -e artifacts/
 !git status --short
 """
             ),
-            markdown(
-                """## 1. Environment readiness
+            markdown("""## 1. Isolated environment and GPU check
 
-Run the next cell before any dataset or NeMo command. On a new runtime it may install or repair dependencies. **If it prints a restart instruction, restart the runtime immediately, then run this notebook from the top.**"""
-            ),
-            code(DEPENDENCY_GUARD_CELL),
+All later project commands run through the local virtual environment, not the notebook kernel's Python."""),
+            code(VENV_CELL),
             code(
-                """import os
-
-if os.environ.get(\"QURAN_COLAB_RESTART_REQUIRED\") == \"1\":
-    raise RuntimeError(
-        \"Restart is required after dependency installation. Use Runtime → Restart session, then Runtime → Run all.\"
-    )
-
-import jiwer
-import numpy as np
-import pandas as pd
-from datasets import load_dataset  # noqa: F401
-
-print(\"Environment verified\")
-print(\"NumPy:\", np.__version__)
-print(\"pandas:\", pd.__version__)
-print(\"jiwer: OK | datasets: OK\")
-"""
-            ),
-            code(
-                """import torch
-
-os.environ[\"PYTORCH_CUDA_ALLOC_CONF\"] = \"expandable_segments:True\"
-assert torch.cuda.is_available(), \"No GPU. Choose Runtime → Change runtime type → T4 GPU or L4 GPU, then restart this notebook.\"
-print(\"GPU:\", torch.cuda.get_device_name(0))
+                """os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+gpu_probe = "import torch; assert torch.cuda.is_available(), 'No GPU'; print('GPU:', torch.cuda.get_device_name(0))"
+subprocess.check_call([str(VENV_PYTHON), "-c", gpu_probe], cwd=PROJECT_DIR)
 !nvidia-smi
 """
             ),
             markdown(
                 """## 2. Immutable PC v2 manifest
 
-This cell creates the manifest only if it does not already exist. The held-out reciters are fixed to **parhizgar** for validation and **fares_abbad** for test. Two immutable backup copies are written automatically."""
+This cell creates the manifest only if it does not already exist. Validation is fixed to **parhizgar** and test is fixed to **fares_abbad**. Two immutable backup copies are written automatically."""
             ),
             code(
-                """!python run_colab_setup.py --config configs/fastconformer_quran.yaml
+                """run_project_script("run_colab_setup.py", "--config", "configs/fastconformer_quran.yaml")
 """
             ),
             code(
                 f"""import json
 from pathlib import Path
-from src.data import manifest_summary
 
-manifest_path = Path(\"{MANIFEST}\")
-assert manifest_path.exists(), f\"Manifest missing: {{manifest_path}}\"
-manifest = json.loads(manifest_path.read_text(encoding=\"utf-8\"))
-summary = manifest_summary(manifest)
-print(summary)
-assert summary[\"integrity\"][\"reciter_leakage_count\"] == 0
-print(\"Manifest integrity: OK\")
+manifest_path = PROJECT_DIR / "{MANIFEST}"
+assert manifest_path.exists(), f"Manifest missing: {{manifest_path}}"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+reciter_sets = {{name: {{row["reciter"] for row in manifest["splits"][name]}} for name in ("train", "validation", "test")}}
+for name in ("train", "validation", "test"):
+    print(f"{{name}}: {{len(manifest['splits'][name])}} clips | reciters={{sorted(reciter_sets[name])}}")
+assert not (reciter_sets["train"] & reciter_sets["validation"])
+assert not (reciter_sets["train"] & reciter_sets["test"])
+assert not (reciter_sets["validation"] & reciter_sets["test"])
+receipt = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/manifests/manifest_backup_receipt.json"
+print("Manifest backups:", json.loads(receipt.read_text(encoding="utf-8"))["backup_paths"])
 """
             ),
             markdown(
                 """## 3. Selected audio and NeMo JSONL manifests
 
-Only the 8,000/1,000/1,000 selected clips are materialized. The local WAV cache is rebuilt automatically after a Colab reset; the JSONL manifests remain on Drive."""
+Only the 8,000/1,000/1,000 selected clips are materialized. Audio cache stays local for speed; durable JSONL manifests remain on Drive."""
             ),
             code(
-                f"""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest {MANIFEST} --materialize
+                f"""run_project_script(
+    "run_colab_setup.py",
+    "--config", "configs/fastconformer_quran.yaml",
+    "--manifest", "{MANIFEST}",
+    "--materialize",
+)
 """
             ),
             markdown(
                 """## 4. Baseline before adaptation
 
-The untouched PC model is evaluated before fine-tuning. Canonical metrics retain diacritics; lexical metrics are the primary fair measure for this non-diacritized backbone."""
+Canonical metrics retain diacritics. Lexical metrics are the primary fair measure for PC because this backbone does not emit diacritics."""
             ),
             code(
-                f"""!python -m src.baseline --config configs/fastconformer_quran.yaml --manifest {MANIFEST}
+                f"""run_project_module(
+    "src.baseline",
+    "--config", "configs/fastconformer_quran.yaml",
+    "--manifest", "{MANIFEST}",
+)
 """
             ),
             code(
-                """import json
-from pathlib import Path
-
-baseline_path = Path(\"artifacts/experiments/fastconformer_pc_v2/results/baseline/metrics.json\")
-baseline = json.loads(baseline_path.read_text(encoding=\"utf-8\"))
-print(\"Baseline test reciter(s):\", baseline[\"held_out_test_reciters\"])
-print(f\"Canonical WER / CER: {baseline['strict']['wer_percent']:.2f}% / {baseline['strict']['cer_percent']:.2f}%\")
-print(f\"Lexical WER / CER: {baseline['diagnostic']['wer_percent']:.2f}% / {baseline['diagnostic']['cer_percent']:.2f}%\")
+                """baseline_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/baseline/metrics.json"
+baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+print("Baseline test reciter(s):", baseline["held_out_test_reciters"])
+print(f"Canonical WER / CER: {baseline['strict']['wer_percent']:.2f}% / {baseline['strict']['cer_percent']:.2f}%")
+print(f"Lexical WER / CER: {baseline['diagnostic']['wer_percent']:.2f}% / {baseline['diagnostic']['cer_percent']:.2f}%")
 """
             ),
             markdown(
                 """## 5. Fine-tuning with recovery checkpoints
 
-Training is restart-safe. A `last.ckpt` is saved every 500 steps on Drive. If Colab disconnects later, reopen this notebook, run the environment section, then rerun **this training cell**; the unfinished stage resumes automatically."""
+A Drive-backed `last.ckpt` is saved every 500 steps. If Colab later disconnects, reopen this notebook, run the environment section, then rerun **only this training cell** to resume the unfinished stage."""
             ),
             code(
-                """import json
-from pathlib import Path
-
-state_path = Path(\"artifacts/experiments/fastconformer_pc_v2/nemo/training_state.json\")
+                """state_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/nemo/training_state.json"
 if state_path.exists():
-    print(\"Existing recovery state:\")
-    print(json.loads(state_path.read_text(encoding=\"utf-8\")))
+    print("Existing recovery state:")
+    print(json.loads(state_path.read_text(encoding="utf-8")))
 else:
-    print(\"No recovery checkpoint yet. Training will start from stage 1.\")
+    print("No recovery checkpoint yet. Training will start from stage 1.")
 """
             ),
             code(
-                f"""!python -m src.train --config configs/fastconformer_quran.yaml --manifest {MANIFEST}
+                f"""run_project_module(
+    "src.train",
+    "--config", "configs/fastconformer_quran.yaml",
+    "--manifest", "{MANIFEST}",
+)
 """
             ),
             code(
-                """summary_path = Path(\"artifacts/experiments/fastconformer_pc_v2/models/training_summary.json\")
+                """summary_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/models/training_summary.json"
 if summary_path.exists():
-    print(json.loads(summary_path.read_text(encoding=\"utf-8\")))
+    print(json.loads(summary_path.read_text(encoding="utf-8")))
 else:
-    print(\"Training is incomplete. Re-run the training cell after any interruption to resume from the latest checkpoint.\")
+    print("Training is incomplete. Re-run the training cell after an interruption to resume from the latest checkpoint.")
 """
             ),
-            markdown(
-                """## 6. Final evaluation and report
-
-These final cells run only after training completes and produce the Before/After tables and chart."""
-            ),
+            markdown("""## 6. Final evaluation and Before/After report"""),
             code(
-                f"""!python -m src.evaluate --config configs/fastconformer_quran.yaml --manifest {MANIFEST}
-"""
-            ),
-            code(
-                """final_path = Path(\"artifacts/experiments/fastconformer_pc_v2/results/finetuned/metrics.json\")
-final_metrics = json.loads(final_path.read_text(encoding=\"utf-8\"))
-print(\"Final test reciter(s):\", final_metrics[\"held_out_test_reciters\"])
-print(f\"Canonical WER / CER: {final_metrics['strict']['wer_percent']:.2f}% / {final_metrics['strict']['cer_percent']:.2f}%\")
-print(f\"Lexical WER / CER: {final_metrics['diagnostic']['wer_percent']:.2f}% / {final_metrics['diagnostic']['cer_percent']:.2f}%\")
+                f"""run_project_module(
+    "src.evaluate",
+    "--config", "configs/fastconformer_quran.yaml",
+    "--manifest", "{MANIFEST}",
+)
 """
             ),
             code(
-                """!python -m src.compare --config configs/fastconformer_quran.yaml
+                """final_path = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/finetuned/metrics.json"
+final_metrics = json.loads(final_path.read_text(encoding="utf-8"))
+print("Final test reciter(s):", final_metrics["held_out_test_reciters"])
+print(f"Canonical WER / CER: {final_metrics['strict']['wer_percent']:.2f}% / {final_metrics['strict']['cer_percent']:.2f}%")
+print(f"Lexical WER / CER: {final_metrics['diagnostic']['wer_percent']:.2f}% / {final_metrics['diagnostic']['cer_percent']:.2f}%")
 """
             ),
+            code("""run_project_module("src.compare", "--config", "configs/fastconformer_quran.yaml")
+"""),
             code(
                 """from IPython.display import Image, display
 
-comparison_dir = Path(\"artifacts/experiments/fastconformer_pc_v2/results/comparison\")
-display(pd.read_csv(comparison_dir / \"metrics_comparison.csv\"))
-display(Image(comparison_dir / \"metrics_comparison.png\"))
-print(\"PC v2 workflow completed.\")
+comparison_dir = PROJECT_DIR / "artifacts/experiments/fastconformer_pc_v2/results/comparison"
+print((comparison_dir / "metrics_comparison.csv").read_text(encoding="utf-8"))
+display(Image(comparison_dir / "metrics_comparison.png"))
+print("PC v2 workflow completed.")
 """
             ),
         ],
