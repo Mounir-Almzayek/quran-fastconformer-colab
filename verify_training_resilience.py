@@ -13,7 +13,10 @@ def main() -> None:
     config_source = (ROOT / "configs" / "fastconformer_quran.yaml").read_text(encoding="utf-8")
     for expected in (
         "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0",
-        "artifacts_dir: artifacts/experiments/fastconformer_pc",
+        "artifacts_dir: artifacts/experiments/fastconformer_pc_v2",
+        "manifest_backup_dir: /content/drive/MyDrive/quran-fastconformer-manifest-backups",
+        "validation_reciter_names: [parhizgar]",
+        "test_reciter_names: [fares_abbad]",
         "num_workers: 0",
         "pin_memory: false",
         "checkpoint_every_n_train_steps: 500",
@@ -25,6 +28,8 @@ def main() -> None:
     assert '"--manifest"' in setup_source
     assert "Reusing locked manifest" in setup_source
     assert "--manifest and --rebuild-manifest cannot be used together" in setup_source
+    assert "_backup_manifest" in setup_source
+    assert "manifest_backup_receipt.json" in setup_source
 
     train_path = ROOT / "src" / "train.py"
     train_source = train_path.read_text(encoding="utf-8")
@@ -60,16 +65,17 @@ def main() -> None:
     assert "restart-safe" in notebook_text
     assert "training_state.json" in notebook_text
     assert "console is intentionally compact" in notebook_text
-    assert "artifacts/experiments/fastconformer_pc" in notebook_text
+    assert "artifacts/experiments/fastconformer_pc_v2" in notebook_text
 
     setup_notebook = json.loads((ROOT / "notebooks" / "01_setup.ipynb").read_text(encoding="utf-8"))
     setup_text = "\n".join(
         "".join(cell.get("source", "")) if isinstance(cell.get("source", ""), list) else cell.get("source", "")
         for cell in setup_notebook["cells"]
     )
-    assert "--manifest artifacts/manifests/experiment_manifest.json" in setup_text
+    assert "run_colab_setup.py --config configs/fastconformer_quran.yaml" in setup_text
+    assert "--manifest" not in setup_text
 
-    print("Passed: PC isolation, locked-manifest reuse, recovery checkpoints, low-RAM defaults, and compact console logging are configured.")
+    print("Passed: PC v2 manifest creation, dual backups, recovery checkpoints, low-RAM defaults, and compact console logging are configured.")
 
 
 if __name__ == "__main__":

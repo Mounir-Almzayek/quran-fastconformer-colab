@@ -1,6 +1,6 @@
 # Quran FastConformer ASR Fine-tuning on Google Colab
 
-This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. Its default experiment starts from NVIDIA’s Arabic punctuation-aware FastConformer PC checkpoint, retains its pretrained BPE tokenizer, selects CTC decoding, and adapts the model to Quranic recitation with NVIDIA NeMo. The previous EveryAyah-trained PCD configuration is retained only as a legacy pipeline-validation reference.
+This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. Its default experiment is **PC v2**, a fresh reproducible run after earlier Drive artifacts were permanently deleted. It starts from NVIDIA’s Arabic punctuation-aware FastConformer PC checkpoint, retains its pretrained BPE tokenizer, selects CTC decoding, and adapts the model to Quranic recitation with NVIDIA NeMo. Previous PCD and PC configurations are retained only as archived references.
 
 > This repository deliberately implements only **Stage 1: Quran ASR domain adaptation**. It does not claim to measure phoneme, tajweed, or mispronunciation metrics that lack the required labels. Those later capabilities need a separate alignment/pronunciation pipeline.
 
@@ -38,6 +38,7 @@ quran-fastconformer-colab/
 ├── configs/
 │   ├── fastconformer_quran.yaml             # Default independent PC experiment
 │   ├── fastconformer_quran_pcd_legacy.yaml  # Preserved prior PCD configuration
+│   ├── fastconformer_quran_pc_v1_archived.yaml # Archived pre-deletion PC setup
 │   └── evaluation_matrix.yaml                # Reportable metric contract
 ├── docs/
 │   └── EVALUATION_MATRIX.md          # Active and deferred metric definitions
@@ -67,11 +68,11 @@ Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastco
 
 | Notebook | Purpose | Main output |
 |---|---|---|
-| `01_setup` | Mounts Drive, installs NeMo, checks the schema, and **reuses** the immutable disjoint-reciter manifest | `artifacts/manifests/experiment_manifest.json` |
+| `01_setup` | Mounts Drive, installs NeMo, checks the schema, and creates the immutable **PC v2** manifest with two backup copies | `artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json` |
 | `02_inspect_everyayah` | Inspects a few real streamed rows | Schema confirmation |
-| `03_prepare_nemo_manifests` | Reuses the locked split, downloads only selected clips into a local Colab WAV cache, and writes PC-specific Drive-backed NeMo JSONL files | `artifacts/experiments/fastconformer_pc/nemo/manifests/` |
-| `04_baseline_fastconformer` | Measures untouched FastConformer PC on held-out test reciter(s) | PC baseline WER/CER and predictions |
-| `05_finetune_fastconformer` | Runs progressive unfreezing stages through NeMo | PC checkpoints and `fastconformer-quran-pc.nemo` |
+| `03_prepare_nemo_manifests` | Reuses the locked PC v2 split, downloads only selected clips into a local Colab WAV cache, and writes PC v2 Drive-backed NeMo JSONL files | `artifacts/experiments/fastconformer_pc_v2/nemo/manifests/` |
+| `04_baseline_fastconformer` | Measures untouched FastConformer PC on held-out PC v2 test reciter(s) | PC v2 baseline WER/CER and predictions |
+| `05_finetune_fastconformer` | Runs progressive unfreezing stages through NeMo | PC v2 checkpoints and `fastconformer-quran-pc-v2.nemo` |
 | `06_evaluate_fastconformer` | Measures final model on the unchanged test reciter(s) | Final WER/CER and predictions |
 | `07_compare_before_after` | Builds global and subgroup comparison reports | CSV, JSON, PNG, examples |
 
@@ -99,12 +100,14 @@ The detailed contract appears in [`docs/EVALUATION_MATRIX.md`](docs/EVALUATION_M
 
 | Artifact | Purpose |
 |---|---|
-| `artifacts/manifests/experiment_manifest.json` | Reproducible evidence of the held-out-reciter split |
-| `artifacts/experiments/fastconformer_pc/nemo/manifests/*.jsonl` | Drive-backed PC NeMo manifests; local WAV cache is rebuilt automatically when a fresh runtime needs it |
-| `artifacts/experiments/fastconformer_pc/results/baseline/` | Untouched PC-model predictions and metrics |
-| `artifacts/experiments/fastconformer_pc/results/finetuned/` | Fine-tuned PC-model predictions and metrics |
-| `artifacts/experiments/fastconformer_pc/models/fastconformer-quran-pc.nemo` | Exported final PC NeMo model |
-| `artifacts/experiments/fastconformer_pc/results/comparison/` | PC Before/After tables, chart, per-reciter/duration analysis, examples |
+| `artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json` | Reproducible evidence of the PC v2 held-out-reciter split |
+| `artifacts/experiments/fastconformer_pc_v2/manifests/archive/` | Internal immutable copy of the PC v2 manifest |
+| `MyDrive/quran-fastconformer-manifest-backups/quran-fastconformer-pc-v2/` | Independent Drive backup outside the project folder |
+| `artifacts/experiments/fastconformer_pc_v2/nemo/manifests/*.jsonl` | Drive-backed PC v2 NeMo manifests; local WAV cache is rebuilt automatically when a fresh runtime needs it |
+| `artifacts/experiments/fastconformer_pc_v2/results/baseline/` | Untouched PC v2 model predictions and metrics |
+| `artifacts/experiments/fastconformer_pc_v2/results/finetuned/` | Fine-tuned PC v2 model predictions and metrics |
+| `artifacts/experiments/fastconformer_pc_v2/models/fastconformer-quran-pc-v2.nemo` | Exported final PC v2 NeMo model |
+| `artifacts/experiments/fastconformer_pc_v2/results/comparison/` | PC v2 Before/After tables, chart, per-reciter/duration analysis, examples |
 
 ## References
 

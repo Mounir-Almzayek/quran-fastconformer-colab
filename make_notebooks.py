@@ -51,27 +51,65 @@ os.chdir(PROJECT_DIR)
 print("Working directory:", Path.cwd())
 '''
 
-DEPENDENCY_GUARD_CELL = '''import importlib.util
+DEPENDENCY_GUARD_CELL = '''
+from pathlib import Path
+import importlib.util
+import shutil
+import site
 import subprocess
 import sys
 
-# A notebook can be opened after a runtime restart. Install project dependencies
-# only when a required module is missing, rather than assuming notebook 01 ran.
-required_modules = ("datasets", "jiwer", "soundfile", "yaml", "nemo", "pandas", "matplotlib")
+# Validate real imports, not merely package metadata. Recent Colab images can
+# leave NumPy 2.x binary extensions behind after NeMo pins NumPy 1.26.4.
+def _numpy_compatible_error():
+    try:
+        import numpy as np
+        if np.__version__ != "1.26.4":
+            return f"NumPy {np.__version__} is installed; this project requires 1.26.4"
+        import pandas as pd
+        from datasets import load_dataset  # noqa: F401
+        return None
+    except Exception as error:
+        return f"binary/import compatibility check failed: {type(error).__name__}: {error}"
 
+
+def _remove_stale_binary_packages():
+    patterns = ("numpy", "numpy-*.dist-info", "pandas", "pandas-*.dist-info")
+    for package_dir in site.getsitepackages():
+        root = Path(package_dir)
+        for pattern in patterns:
+            for target in root.glob(pattern):
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
+
+
+compatibility_error = _numpy_compatible_error()
+required_modules = ("datasets", "jiwer", "soundfile", "yaml", "nemo", "matplotlib")
 missing_modules = [name for name in required_modules if importlib.util.find_spec(name) is None]
-needs_numpy_downgrade = False
-if not missing_modules:
-    import numpy as np
-    needs_numpy_downgrade = int(np.__version__.split(".")[0]) >= 2
 
-if missing_modules or needs_numpy_downgrade:
-    reason = missing_modules or ["numpy<2 required by the current NeMo audio loader"]
-    print("Installing compatible runtime dependencies:", reason)
+if compatibility_error:
+    print("Repairing incompatible NumPy/pandas binaries:", compatibility_error)
+    subprocess.call([sys.executable, "-m", "pip", "uninstall", "-y", "numpy", "pandas"])
+    _remove_stale_binary_packages()
+    subprocess.check_call([
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--no-cache-dir",
+        "--force-reinstall",
+        "numpy==1.26.4",
+        "pandas==2.2.2",
+    ])
+    print("Clean NumPy repair completed. Use Runtime → Restart session before running any other cell.")
+elif missing_modules:
+    print("Installing missing project dependencies:", missing_modules)
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "-r", "requirements.txt"])
-    print("Dependencies updated. Restart the runtime once before launching a NeMo stage.")
+    print("Dependencies updated. Use Runtime → Restart session before launching a NeMo stage.")
 else:
-    print("Core project dependencies are available.")
+    print("Core project dependencies and NumPy binary compatibility are available.")
 '''
 
 
@@ -79,9 +117,9 @@ def main() -> None:
     NOTEBOOKS.mkdir(parents=True, exist_ok=True)
 
     save("01_setup.ipynb", [
-        markdown("""# 01 — FastConformer PC environment and locked reciter split
+        markdown("""# 01 — FastConformer PC v2 environment and immutable reciter split
 
-This notebook prepares a single-GPU Colab runtime and validates the current EveryAyah schema against the existing immutable experiment manifest. The PC experiment reuses the original disjoint-reciter split."""),
+This notebook prepares a single-GPU Colab runtime and creates the immutable PC v2 manifest with automatic backup copies."""),
         markdown("""> **Do not recreate the manifest after the baseline.** A new manifest changes test reciters and invalidates Before/After comparison."""),
         code("""from google.colab import drive
 drive.mount('/content/drive')
@@ -90,8 +128,8 @@ drive.mount('/content/drive')
         code(DEPENDENCY_GUARD_CELL),
         code("""!nvidia-smi
 """),
-        code("""# Reuse and validate the locked split. Never remove --manifest here.
-!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
+        code("""# Create the PC v2 split once. Backup copies are printed automatically.
+!python run_colab_setup.py --config configs/fastconformer_quran.yaml
 """),
     ])
 
@@ -119,7 +157,7 @@ for index, item in zip(range(3), stream):
 NeMo training requires local audio paths. This stage reuses the immutable manifest and writes PC-specific JSONL manifests. The rest of EveryAyah remains undownloaded."""),
         code(PROJECT_CELL),
         code(DEPENDENCY_GUARD_CELL),
-        code("""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json --materialize
+        code("""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json --materialize
 """),
         code("""import json
 from pathlib import Path
@@ -144,11 +182,11 @@ print("Passed: all validation/test reciters are unseen during training.")
 This measures the untouched PC model on the locked held-out reciter. Canonical scores retain diacritics, while quranic_light scores isolate lexical ASR quality."""),
         code(PROJECT_CELL),
         code(DEPENDENCY_GUARD_CELL),
-        code("""!python -m src.baseline --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
+        code("""!python -m src.baseline --config configs/fastconformer_quran.yaml --manifest artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json
 """),
         code("""import json
 from pathlib import Path
-metrics = json.loads(Path("artifacts/experiments/fastconformer_pc/results/baseline/metrics.json").read_text(encoding="utf-8"))
+metrics = json.loads(Path("artifacts/experiments/fastconformer_pc_v2/results/baseline/metrics.json").read_text(encoding="utf-8"))
 print("Held-out reciter(s):", metrics["held_out_test_reciters"])
 print(f"Canonical WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
 print(f"Lexical WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
@@ -164,11 +202,11 @@ The workflow keeps the pretrained Arabic tokenizer, selects CTC decoding, and pe
         code("""import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 """),
-        code("""!python -m src.train --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
+        code("""!python -m src.train --config configs/fastconformer_quran.yaml --manifest artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json
 """),
         code("""import json
 from pathlib import Path
-summary = json.loads(Path("artifacts/experiments/fastconformer_pc/models/training_summary.json").read_text(encoding="utf-8"))
+summary = json.loads(Path("artifacts/experiments/fastconformer_pc_v2/models/training_summary.json").read_text(encoding="utf-8"))
 summary
 """),
     ])
@@ -179,11 +217,11 @@ summary
 This evaluates the exported `.nemo` file on the same held-out reciter set used in notebook 04. It does not select checkpoints or change data membership."""),
         code(PROJECT_CELL),
         code(DEPENDENCY_GUARD_CELL),
-        code("""!python -m src.evaluate --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
+        code("""!python -m src.evaluate --config configs/fastconformer_quran.yaml --manifest artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json
 """),
         code("""import json
 from pathlib import Path
-metrics = json.loads(Path("artifacts/experiments/fastconformer_pc/results/finetuned/metrics.json").read_text(encoding="utf-8"))
+metrics = json.loads(Path("artifacts/experiments/fastconformer_pc_v2/results/finetuned/metrics.json").read_text(encoding="utf-8"))
 print("Held-out reciter(s):", metrics["held_out_test_reciters"])
 print(f"Canonical WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
 print(f"Lexical WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
@@ -201,7 +239,7 @@ This final notebook verifies that baseline and final metrics use the same manife
         code("""import pandas as pd
 from IPython.display import Image, display
 
-comparison_dir = "artifacts/experiments/fastconformer_pc/results/comparison"
+comparison_dir = "artifacts/experiments/fastconformer_pc_v2/results/comparison"
 display(pd.read_csv(f"{comparison_dir}/metrics_comparison.csv"))
 display(Image(f"{comparison_dir}/metrics_comparison.png"))
 """),

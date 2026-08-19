@@ -1,13 +1,11 @@
 # Independent FastConformer Quran ASR experiment for a single Colab GPU.
-# PC v2 is a new experiment because earlier Drive artifacts were permanently deleted.
-# The legacy PCD and previous PC configuration remain archived under configs/.
+# Primary research experiment: the punctuation-only FastConformer PC checkpoint.
+# It has no EveryAyah declaration in its public model card. The prior PCD setup
+# remains available in configs/fastconformer_quran_pcd_legacy.yaml.
 project:
-  name: quran-fastconformer-pc-v2
+  name: quran-fastconformer-pc-independent
   seed: 2419
-  artifacts_dir: artifacts/experiments/fastconformer_pc_v2
-  # A second copy lives outside the project folder so a project-folder deletion
-  # does not remove the only immutable split record.
-  manifest_backup_dir: /content/drive/MyDrive/quran-fastconformer-manifest-backups
+  artifacts_dir: artifacts/experiments/fastconformer_pc
   # WAV files are intentionally kept on Colab local disk; Drive stores durable manifests, checkpoints, models, and reports.
   runtime_audio_dir: /content/quran-fastconformer-audio
 
@@ -33,9 +31,6 @@ dataset:
     minimum_samples_per_holdout_reciter: 1000
     validation_reciters: 1
     test_reciters: 1
-    # Keep the held-out speaker policy stable across recreated experiments.
-    validation_reciter_names: [parhizgar]
-    test_reciter_names: [fares_abbad]
 
 text:
   # The PC tokenizer/output is non-diacritized. Training labels remove diacritics
@@ -50,8 +45,8 @@ model:
   sample_rate: 16000
 
 training:
-  work_dir: artifacts/experiments/fastconformer_pc_v2/nemo
-  final_model_path: artifacts/experiments/fastconformer_pc_v2/models/fastconformer-quran-pc-v2.nemo
+  work_dir: artifacts/experiments/fastconformer_pc/nemo
+  final_model_path: artifacts/experiments/fastconformer_pc/models/fastconformer-quran-pc.nemo
   batch_size: 4
   validation_batch_size: 4
   # Single-process audio loading is slower but prevents worker queues from
@@ -83,9 +78,9 @@ training:
       learning_rate: 1.0e-5
 
 reporting:
-  baseline_metrics_file: artifacts/experiments/fastconformer_pc_v2/results/baseline/metrics.json
-  finetuned_metrics_file: artifacts/experiments/fastconformer_pc_v2/results/finetuned/metrics.json
-  comparison_dir: artifacts/experiments/fastconformer_pc_v2/results/comparison
+  baseline_metrics_file: artifacts/experiments/fastconformer_pc/results/baseline/metrics.json
+  finetuned_metrics_file: artifacts/experiments/fastconformer_pc/results/finetuned/metrics.json
+  comparison_dir: artifacts/experiments/fastconformer_pc/results/comparison
   representative_examples: 12
   duration_bins_seconds:
     - label: short_0_to_10

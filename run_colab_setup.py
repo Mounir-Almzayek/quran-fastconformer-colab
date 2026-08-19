@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import platform
 from pathlib import Path
 
@@ -11,6 +13,42 @@ import torch
 
 from src.common import ensure_project_dirs, load_config, write_json
 from src.data import build_manifest, inspect_schema, manifest_summary, materialize_nemo_manifests
+
+
+def _manifest_fingerprint(manifest: object) -> str:
+    """Return a content hash used to identify an immutable split artifact."""
+    encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _backup_manifest(manifest: dict, manifest_path: Path, config: dict, artifacts: Path) -> list[Path]:
+    """Write immutable split copies both inside the experiment and outside the project tree."""
+    fingerprint = _manifest_fingerprint(manifest)
+    filename = f"experiment_manifest_{fingerprint[:16]}.json"
+    backup_dir_value = config["project"].get(
+        "manifest_backup_dir",
+        "artifacts/manifest_backups",
+    )
+    backup_dir = Path(backup_dir_value).expanduser()
+    if not backup_dir.is_absolute():
+        backup_dir = Path(config["_project_root"]) / backup_dir
+    destinations = [
+        artifacts / "manifests" / "archive" / filename,
+        backup_dir / str(config["project"]["name"]) / filename,
+    ]
+    written: list[Path] = []
+    for destination in destinations:
+        write_json(manifest, destination)
+        written.append(destination)
+    write_json(
+        {
+            "manifest_path": str(manifest_path.resolve()),
+            "sha256": fingerprint,
+            "backup_paths": [str(path.resolve()) for path in written],
+        },
+        artifacts / "manifests" / "manifest_backup_receipt.json",
+    )
+    return written
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,18 +87,19 @@ def main() -> None:
     if args.manifest:
         if not manifest_path.exists():
             raise FileNotFoundError(f"Locked manifest not found: {manifest_path}")
-        import json
-
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         print(f"Reusing locked manifest: {manifest_path}")
     elif manifest_path.exists() and not args.rebuild_manifest:
-        import json
-
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         print(f"Keeping existing manifest: {manifest_path}")
     else:
         manifest = build_manifest(config, manifest_path)
         print(f"Created disjoint-reciter manifest: {manifest_path}")
+
+    backups = _backup_manifest(manifest, manifest_path, config, artifacts)
+    print("Manifest backup copies:")
+    for backup in backups:
+        print(f" - {backup}")
 
     summary = manifest_summary(manifest)
     if summary["integrity"]["reciter_leakage_count"]:

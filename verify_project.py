@@ -17,7 +17,10 @@ def main() -> None:
     legacy_config_source = (ROOT / "configs" / "fastconformer_quran_pcd_legacy.yaml").read_text(encoding="utf-8")
     for expected in (
         "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0",
-        "artifacts_dir: artifacts/experiments/fastconformer_pc",
+        "artifacts_dir: artifacts/experiments/fastconformer_pc_v2",
+        "manifest_backup_dir: /content/drive/MyDrive/quran-fastconformer-manifest-backups",
+        "validation_reciter_names: [parhizgar]",
+        "test_reciter_names: [fares_abbad]",
         "decoder: ctc",
         "strategy: disjoint_reciters",
         "train: 8000",
@@ -31,6 +34,7 @@ def main() -> None:
     ):
         assert expected in config_source, f"Missing PC experiment setting: {expected}"
     assert "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0" in legacy_config_source
+    assert (ROOT / "configs" / "fastconformer_quran_pc_v1_archived.yaml").is_file()
 
     contract_source = (ROOT / "configs" / "evaluation_matrix.yaml").read_text(encoding="utf-8")
     assert "current_pipeline: fastconformer_quran_text_asr" in contract_source
@@ -41,8 +45,9 @@ def main() -> None:
     for script_name in ("run_colab_setup.py", "make_notebooks.py"):
         ast.parse((ROOT / script_name).read_text(encoding="utf-8"), filename=script_name)
     notebook_generator = (ROOT / "make_notebooks.py").read_text(encoding="utf-8")
-    assert "--manifest artifacts/manifests/experiment_manifest.json" in notebook_generator
-    assert "artifacts/experiments/fastconformer_pc" in notebook_generator
+    assert "Create the PC v2 split once" in notebook_generator
+    assert "artifacts/experiments/fastconformer_pc_v2/manifests/experiment_manifest.json" in notebook_generator
+    assert "artifacts/experiments/fastconformer_pc_v2" in notebook_generator
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert "numpy==1.26.4" in requirements

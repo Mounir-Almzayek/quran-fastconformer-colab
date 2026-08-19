@@ -139,11 +139,30 @@ def build_manifest(config: Mapping[str, Any], destination: str | Path) -> dict[s
             f"Increase candidate_pool_size or lower the threshold. Candidate counts: {counts}"
         )
 
-    ordered_eligible = _seeded_order(eligible, int(config["project"]["seed"]))
-    test_reciters = ordered_eligible[: int(split_config["test_reciters"])]
-    validation_reciters = ordered_eligible[
-        int(split_config["test_reciters"]): needed
-    ]
+    fixed_validation = [str(value) for value in split_config.get("validation_reciter_names", [])]
+    fixed_test = [str(value) for value in split_config.get("test_reciter_names", [])]
+    if fixed_validation or fixed_test:
+        if len(fixed_validation) != int(split_config["validation_reciters"]):
+            raise RuntimeError("validation_reciter_names count does not match validation_reciters.")
+        if len(fixed_test) != int(split_config["test_reciters"]):
+            raise RuntimeError("test_reciter_names count does not match test_reciters.")
+        if set(fixed_validation) & set(fixed_test):
+            raise RuntimeError("A fixed reciter was assigned to both Validation and Test.")
+        requested = set(fixed_validation) | set(fixed_test)
+        unavailable = sorted(requested - set(eligible))
+        if unavailable:
+            raise RuntimeError(
+                "Configured held-out reciters are unavailable or below the sample threshold: "
+                f"{unavailable}."
+            )
+        validation_reciters = fixed_validation
+        test_reciters = fixed_test
+    else:
+        ordered_eligible = _seeded_order(eligible, int(config["project"]["seed"]))
+        test_reciters = ordered_eligible[: int(split_config["test_reciters"])]
+        validation_reciters = ordered_eligible[
+            int(split_config["test_reciters"]): needed
+        ]
     train_reciters = sorted(set(by_reciter) - set(test_reciters) - set(validation_reciters))
     if not train_reciters:
         raise RuntimeError("No reciters remain for training after reciter-level holdout selection.")
