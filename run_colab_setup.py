@@ -16,6 +16,10 @@ from src.data import build_manifest, inspect_schema, manifest_summary, materiali
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a disjoint-reciter manifest and local NeMo JSONL files.")
     parser.add_argument("--config", default="configs/fastconformer_quran.yaml")
+    parser.add_argument(
+        "--manifest",
+        help="Reuse an existing locked manifest instead of creating an experiment-local split.",
+    )
     parser.add_argument("--rebuild-manifest", action="store_true", help="Intentionally create a new split and invalidate prior results.")
     parser.add_argument("--materialize", action="store_true", help="Download only selected clips and write NeMo WAV/JSONL artifacts.")
     return parser.parse_args()
@@ -39,9 +43,19 @@ def main() -> None:
     if schema["missing_expected_columns"]:
         raise RuntimeError(f"Dataset is missing required columns: {schema['missing_expected_columns']}")
 
-    manifest_path = paths["manifests"] / "experiment_manifest.json"
-    if manifest_path.exists() and not args.rebuild_manifest:
+    if args.manifest and args.rebuild_manifest:
+        raise ValueError("--manifest and --rebuild-manifest cannot be used together.")
+    manifest_path = Path(args.manifest).resolve() if args.manifest else paths["manifests"] / "experiment_manifest.json"
+    if args.manifest:
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Locked manifest not found: {manifest_path}")
         import json
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        print(f"Reusing locked manifest: {manifest_path}")
+    elif manifest_path.exists() and not args.rebuild_manifest:
+        import json
+
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         print(f"Keeping existing manifest: {manifest_path}")
     else:

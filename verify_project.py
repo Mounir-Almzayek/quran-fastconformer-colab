@@ -7,28 +7,42 @@ import ast
 import json
 from pathlib import Path
 
-import yaml
 
 
 ROOT = Path(__file__).resolve().parent
 
 
 def main() -> None:
-    config = yaml.safe_load((ROOT / "configs" / "fastconformer_quran.yaml").read_text(encoding="utf-8"))
-    assert config["model"]["pretrained_name"] == "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
-    assert config["model"]["decoder"] == "ctc"
-    assert config["dataset"]["reciter_split"]["strategy"] == "disjoint_reciters"
-    assert config["dataset"]["sample_caps"] == {"train": 8000, "validation": 1000, "test": 1000}
-    assert config["dataset"]["shuffle_buffer"] <= 1024
-    assert config["project"]["runtime_audio_dir"] == "/content/quran-fastconformer-audio"
-    assert [stage["encoder_layers"] for stage in config["training"]["stages"]] == ["top_3", "upper_half", "all"]
+    config_source = (ROOT / "configs" / "fastconformer_quran.yaml").read_text(encoding="utf-8")
+    legacy_config_source = (ROOT / "configs" / "fastconformer_quran_pcd_legacy.yaml").read_text(encoding="utf-8")
+    for expected in (
+        "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0",
+        "artifacts_dir: artifacts/experiments/fastconformer_pc",
+        "decoder: ctc",
+        "strategy: disjoint_reciters",
+        "train: 8000",
+        "validation: 1000",
+        "test: 1000",
+        "shuffle_buffer: 1024",
+        "runtime_audio_dir: /content/quran-fastconformer-audio",
+        "encoder_layers: top_3",
+        "encoder_layers: upper_half",
+        "encoder_layers: all",
+    ):
+        assert expected in config_source, f"Missing PC experiment setting: {expected}"
+    assert "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0" in legacy_config_source
 
-    contract = yaml.safe_load((ROOT / "configs" / "evaluation_matrix.yaml").read_text(encoding="utf-8"))
-    assert contract["scope"]["current_pipeline"] == "fastconformer_quran_text_asr"
-    assert contract["scope"]["primary_test_policy"] == "locked_disjoint_reciter_manifest"
+    contract_source = (ROOT / "configs" / "evaluation_matrix.yaml").read_text(encoding="utf-8")
+    assert "current_pipeline: fastconformer_quran_text_asr" in contract_source
+    assert "primary_test_policy: locked_disjoint_reciter_manifest" in contract_source
 
     for source in sorted((ROOT / "src").glob("*.py")):
         ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    for script_name in ("run_colab_setup.py", "make_notebooks.py"):
+        ast.parse((ROOT / script_name).read_text(encoding="utf-8"), filename=script_name)
+    notebook_generator = (ROOT / "make_notebooks.py").read_text(encoding="utf-8")
+    assert "--manifest artifacts/manifests/experiment_manifest.json" in notebook_generator
+    assert "artifacts/experiments/fastconformer_pc" in notebook_generator
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert "numpy==1.26.4" in requirements

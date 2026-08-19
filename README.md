@@ -1,14 +1,14 @@
 # Quran FastConformer ASR Fine-tuning on Google Colab
 
-This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. It starts from NVIDIA’s Arabic hybrid FastConformer checkpoint, retains its pretrained BPE tokenizer, selects CTC decoding, and adapts the model to Quranic recitation with NVIDIA NeMo.
+This project is an **independent FastConformer Quran ASR experiment** built for a single Google Colab GPU. Its default experiment starts from NVIDIA’s Arabic punctuation-aware FastConformer PC checkpoint, retains its pretrained BPE tokenizer, selects CTC decoding, and adapts the model to Quranic recitation with NVIDIA NeMo. The previous EveryAyah-trained PCD configuration is retained only as a legacy pipeline-validation reference.
 
 > This repository deliberately implements only **Stage 1: Quran ASR domain adaptation**. It does not claim to measure phoneme, tajweed, or mispronunciation metrics that lack the required labels. Those later capabilities need a separate alignment/pronunciation pipeline.
 
 | Design choice | Implementation |
 |---|---|
-| Backbone | `nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0` loaded through NVIDIA NeMo |
+| Backbone | `nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0` loaded through NVIDIA NeMo |
 | Decoder | CTC, chosen for deterministic token timing/alignment compatibility in later work |
-| Tokenizer | The pretrained model’s BPE tokenizer is retained; this experiment does not invent or copy a tokenizer |
+| Tokenizer | The pretrained model’s BPE tokenizer is retained; PC output is Arabic with punctuation but without diacritics |
 | Dataset | `tarteel-ai/everyayah`, read with streaming during selection |
 | Split | **Disjoint-reciter** Train/Validation/Test partitions; no reciter crosses a boundary |
 | Cohort size | Capped to 8,000 train, 1,000 validation, and 1,000 test clips for a first Colab-scale experiment |
@@ -36,8 +36,9 @@ The created manifest records the held-out identities and fails if a reciter cros
 ```text
 quran-fastconformer-colab/
 ├── configs/
-│   ├── fastconformer_quran.yaml      # Data, split, NeMo, and training policy
-│   └── evaluation_matrix.yaml        # Reportable metric contract
+│   ├── fastconformer_quran.yaml             # Default independent PC experiment
+│   ├── fastconformer_quran_pcd_legacy.yaml  # Preserved prior PCD configuration
+│   └── evaluation_matrix.yaml                # Reportable metric contract
 ├── docs/
 │   └── EVALUATION_MATRIX.md          # Active and deferred metric definitions
 ├── notebooks/
@@ -66,11 +67,11 @@ Copy the project contents to a Google Drive folder such as `MyDrive/quran-fastco
 
 | Notebook | Purpose | Main output |
 |---|---|---|
-| `01_setup` | Mounts Drive, installs NeMo, checks the schema, and creates the immutable disjoint-reciter manifest | `artifacts/manifests/experiment_manifest.json` |
+| `01_setup` | Mounts Drive, installs NeMo, checks the schema, and **reuses** the immutable disjoint-reciter manifest | `artifacts/manifests/experiment_manifest.json` |
 | `02_inspect_everyayah` | Inspects a few real streamed rows | Schema confirmation |
-| `03_prepare_nemo_manifests` | Downloads only the selected clips into a local Colab WAV cache and writes Drive-backed NeMo JSONL files; the cache is recreated automatically after a runtime reset | `artifacts/nemo/manifests/` |
-| `04_baseline_fastconformer` | Measures untouched Arabic FastConformer on held-out test reciter(s) | Baseline WER/CER and predictions |
-| `05_finetune_fastconformer` | Runs progressive unfreezing stages through NeMo | Stage checkpoints and `fastconformer-quran.nemo` |
+| `03_prepare_nemo_manifests` | Reuses the locked split, downloads only selected clips into a local Colab WAV cache, and writes PC-specific Drive-backed NeMo JSONL files | `artifacts/experiments/fastconformer_pc/nemo/manifests/` |
+| `04_baseline_fastconformer` | Measures untouched FastConformer PC on held-out test reciter(s) | PC baseline WER/CER and predictions |
+| `05_finetune_fastconformer` | Runs progressive unfreezing stages through NeMo | PC checkpoints and `fastconformer-quran-pc.nemo` |
 | `06_evaluate_fastconformer` | Measures final model on the unchanged test reciter(s) | Final WER/CER and predictions |
 | `07_compare_before_after` | Builds global and subgroup comparison reports | CSV, JSON, PNG, examples |
 
@@ -88,7 +89,7 @@ These are conservative initial settings for a Colab experiment, not claims about
 
 ## Evaluation policy
 
-The active metrics are strict and diagnostic WER/CER, with optional analysis by held-out reciter and recording duration. Strict scores retain diacritics after safe Unicode cleanup; diagnostic scores remove diacritics and normalize selected Arabic variants only to explain error type.
+The active metrics are canonical and lexical WER/CER, with optional analysis by held-out reciter and recording duration. Canonical scores retain diacritics after safe Unicode cleanup and therefore reveal the surface-form gap of the non-diacritized PC output. Lexical `quranic_light` scores remove diacritics and normalize selected Arabic variants to measure core ASR recognition fairly.
 
 The detailed contract appears in [`docs/EVALUATION_MATRIX.md`](docs/EVALUATION_MATRIX.md). It explicitly defers PER, phoneme substitutions/deletions/insertions, Tashkeel F1, location metrics, RTF, memory metrics, and mispronunciation-detection metrics until their required labels, model outputs, or runtime instrumentation exist.
 
@@ -99,11 +100,11 @@ The detailed contract appears in [`docs/EVALUATION_MATRIX.md`](docs/EVALUATION_M
 | Artifact | Purpose |
 |---|---|
 | `artifacts/manifests/experiment_manifest.json` | Reproducible evidence of the held-out-reciter split |
-| `artifacts/nemo/manifests/*.jsonl` | Drive-backed NeMo text manifests; their local WAV cache is rebuilt automatically whenever a fresh runtime needs it |
-| `results/baseline/` | Untouched-model predictions and metrics |
-| `results/finetuned/` | Fine-tuned-model predictions and metrics |
-| `models/fastconformer-quran.nemo` | Exported final NeMo model |
-| `results/comparison/` | Before/After tables, chart, per-reciter/duration analysis, examples |
+| `artifacts/experiments/fastconformer_pc/nemo/manifests/*.jsonl` | Drive-backed PC NeMo manifests; local WAV cache is rebuilt automatically when a fresh runtime needs it |
+| `artifacts/experiments/fastconformer_pc/results/baseline/` | Untouched PC-model predictions and metrics |
+| `artifacts/experiments/fastconformer_pc/results/finetuned/` | Fine-tuned PC-model predictions and metrics |
+| `artifacts/experiments/fastconformer_pc/models/fastconformer-quran-pc.nemo` | Exported final PC NeMo model |
+| `artifacts/experiments/fastconformer_pc/results/comparison/` | PC Before/After tables, chart, per-reciter/duration analysis, examples |
 
 ## References
 

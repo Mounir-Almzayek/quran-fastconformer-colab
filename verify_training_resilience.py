@@ -12,11 +12,19 @@ ROOT = Path(__file__).resolve().parent
 def main() -> None:
     config_source = (ROOT / "configs" / "fastconformer_quran.yaml").read_text(encoding="utf-8")
     for expected in (
+        "pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0",
+        "artifacts_dir: artifacts/experiments/fastconformer_pc",
         "num_workers: 0",
         "pin_memory: false",
         "checkpoint_every_n_train_steps: 500",
     ):
         assert expected in config_source, f"Missing low-RAM configuration: {expected}"
+
+    setup_source = (ROOT / "run_colab_setup.py").read_text(encoding="utf-8")
+    ast.parse(setup_source)
+    assert '"--manifest"' in setup_source
+    assert "Reusing locked manifest" in setup_source
+    assert "--manifest and --rebuild-manifest cannot be used together" in setup_source
 
     train_path = ROOT / "src" / "train.py"
     train_source = train_path.read_text(encoding="utf-8")
@@ -52,8 +60,16 @@ def main() -> None:
     assert "restart-safe" in notebook_text
     assert "training_state.json" in notebook_text
     assert "console is intentionally compact" in notebook_text
+    assert "artifacts/experiments/fastconformer_pc" in notebook_text
 
-    print("Passed: recovery checkpoints, low-RAM defaults, and compact console logging are configured.")
+    setup_notebook = json.loads((ROOT / "notebooks" / "01_setup.ipynb").read_text(encoding="utf-8"))
+    setup_text = "\n".join(
+        "".join(cell.get("source", "")) if isinstance(cell.get("source", ""), list) else cell.get("source", "")
+        for cell in setup_notebook["cells"]
+    )
+    assert "--manifest artifacts/manifests/experiment_manifest.json" in setup_text
+
+    print("Passed: PC isolation, locked-manifest reuse, recovery checkpoints, low-RAM defaults, and compact console logging are configured.")
 
 
 if __name__ == "__main__":

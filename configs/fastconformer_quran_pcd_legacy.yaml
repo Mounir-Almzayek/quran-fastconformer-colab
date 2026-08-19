@@ -1,11 +1,9 @@
 # Independent FastConformer Quran ASR experiment for a single Colab GPU.
-# Primary research experiment: the punctuation-only FastConformer PC checkpoint.
-# It has no EveryAyah declaration in its public model card. The prior PCD setup
-# remains available in configs/fastconformer_quran_pcd_legacy.yaml.
+# The pretrained tokenizer is preserved; this project does not build a copied tokenizer.
 project:
-  name: quran-fastconformer-pc-independent
+  name: quran-fastconformer-colab
   seed: 2419
-  artifacts_dir: artifacts/experiments/fastconformer_pc
+  artifacts_dir: artifacts
   # WAV files are intentionally kept on Colab local disk; Drive stores durable manifests, checkpoints, models, and reports.
   runtime_audio_dir: /content/quran-fastconformer-audio
 
@@ -33,20 +31,19 @@ dataset:
     test_reciters: 1
 
 text:
-  # The PC tokenizer/output is non-diacritized. Training labels remove diacritics
-  # while evaluation preserves both canonical surface and lexical protocols.
-  target_normalization: quranic_light
+  # Target labels retain diacritics and are canonicalized consistently before NeMo sees them.
+  target_normalization: canonical
   primary_normalization: canonical
   diagnostic_normalization: quranic_light
 
 model:
-  pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pc_v1.0
+  pretrained_name: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0
   decoder: ctc
   sample_rate: 16000
 
 training:
-  work_dir: artifacts/experiments/fastconformer_pc/nemo
-  final_model_path: artifacts/experiments/fastconformer_pc/models/fastconformer-quran-pc.nemo
+  work_dir: artifacts/nemo
+  final_model_path: artifacts/models/fastconformer-quran.nemo
   batch_size: 4
   validation_batch_size: 4
   # Single-process audio loading is slower but prevents worker queues from
@@ -78,9 +75,9 @@ training:
       learning_rate: 1.0e-5
 
 reporting:
-  baseline_metrics_file: artifacts/experiments/fastconformer_pc/results/baseline/metrics.json
-  finetuned_metrics_file: artifacts/experiments/fastconformer_pc/results/finetuned/metrics.json
-  comparison_dir: artifacts/experiments/fastconformer_pc/results/comparison
+  baseline_metrics_file: artifacts/results/baseline/metrics.json
+  finetuned_metrics_file: artifacts/results/finetuned/metrics.json
+  comparison_dir: artifacts/results/comparison
   representative_examples: 12
   duration_bins_seconds:
     - label: short_0_to_10

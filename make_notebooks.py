@@ -79,9 +79,9 @@ def main() -> None:
     NOTEBOOKS.mkdir(parents=True, exist_ok=True)
 
     save("01_setup.ipynb", [
-        markdown("""# 01 — FastConformer environment and reciter-held-out manifest
+        markdown("""# 01 — FastConformer PC environment and locked reciter split
 
-This notebook prepares a single-GPU Colab runtime, validates the current EveryAyah schema, and creates the one immutable experiment manifest. The split is by **reciter**, not random clip: a reciter assigned to Test cannot appear in Train or Validation."""),
+This notebook prepares a single-GPU Colab runtime and validates the current EveryAyah schema against the existing immutable experiment manifest. The PC experiment reuses the original disjoint-reciter split."""),
         markdown("""> **Do not recreate the manifest after the baseline.** A new manifest changes test reciters and invalidates Before/After comparison."""),
         code("""from google.colab import drive
 drive.mount('/content/drive')
@@ -90,8 +90,8 @@ drive.mount('/content/drive')
         code(DEPENDENCY_GUARD_CELL),
         code("""!nvidia-smi
 """),
-        code("""# Create and validate the disjoint-reciter split. No audio files are downloaded in this first step.
-!python run_colab_setup.py --config configs/fastconformer_quran.yaml
+        code("""# Reuse and validate the locked split. Never remove --manifest here.
+!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
 """),
     ])
 
@@ -114,12 +114,12 @@ for index, item in zip(range(3), stream):
     ])
 
     save("03_prepare_nemo_manifests.ipynb", [
-        markdown("""# 03 — Materialize only the selected NeMo data
+        markdown("""# 03 — Materialize only the locked NeMo data for FastConformer PC
 
-NeMo training requires local audio paths. This stage downloads **only** the rows selected in the manifest and writes WAV files plus JSONL manifests for Train, Validation, and Test. The rest of EveryAyah remains undownloaded."""),
+NeMo training requires local audio paths. This stage reuses the immutable manifest and writes PC-specific JSONL manifests. The rest of EveryAyah remains undownloaded."""),
         code(PROJECT_CELL),
         code(DEPENDENCY_GUARD_CELL),
-        code("""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --materialize
+        code("""!python run_colab_setup.py --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json --materialize
 """),
         code("""import json
 from pathlib import Path
@@ -139,19 +139,19 @@ print("Passed: all validation/test reciters are unseen during training.")
     ])
 
     save("04_baseline_fastconformer.ipynb", [
-        markdown("""# 04 — Baseline: pretrained Arabic FastConformer
+        markdown("""# 04 — Baseline: independent FastConformer PC
 
-This measures the untouched NVIDIA Arabic FastConformer on the held-out test reciter(s). The result is the only valid Before value for this manifest."""),
+This measures the untouched PC model on the locked held-out reciter. Canonical scores retain diacritics, while quranic_light scores isolate lexical ASR quality."""),
         code(PROJECT_CELL),
         code(DEPENDENCY_GUARD_CELL),
         code("""!python -m src.baseline --config configs/fastconformer_quran.yaml --manifest artifacts/manifests/experiment_manifest.json
 """),
         code("""import json
 from pathlib import Path
-metrics = json.loads(Path("artifacts/results/baseline/metrics.json").read_text(encoding="utf-8"))
+metrics = json.loads(Path("artifacts/experiments/fastconformer_pc/results/baseline/metrics.json").read_text(encoding="utf-8"))
 print("Held-out reciter(s):", metrics["held_out_test_reciters"])
-print(f"Strict WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
-print(f"Diagnostic WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
+print(f"Canonical WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
+print(f"Lexical WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
 """),
     ])
 
@@ -168,7 +168,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 """),
         code("""import json
 from pathlib import Path
-summary = json.loads(Path("artifacts/models/training_summary.json").read_text(encoding="utf-8"))
+summary = json.loads(Path("artifacts/experiments/fastconformer_pc/models/training_summary.json").read_text(encoding="utf-8"))
 summary
 """),
     ])
@@ -183,10 +183,10 @@ This evaluates the exported `.nemo` file on the same held-out reciter set used i
 """),
         code("""import json
 from pathlib import Path
-metrics = json.loads(Path("artifacts/results/finetuned/metrics.json").read_text(encoding="utf-8"))
+metrics = json.loads(Path("artifacts/experiments/fastconformer_pc/results/finetuned/metrics.json").read_text(encoding="utf-8"))
 print("Held-out reciter(s):", metrics["held_out_test_reciters"])
-print(f"Strict WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
-print(f"Diagnostic WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
+print(f"Canonical WER / CER: {metrics['strict']['wer_percent']:.2f}% / {metrics['strict']['cer_percent']:.2f}%")
+print(f"Lexical WER / CER: {metrics['diagnostic']['wer_percent']:.2f}% / {metrics['diagnostic']['cer_percent']:.2f}%")
 """),
     ])
 
@@ -201,15 +201,16 @@ This final notebook verifies that baseline and final metrics use the same manife
         code("""import pandas as pd
 from IPython.display import Image, display
 
-display(pd.read_csv("artifacts/results/comparison/metrics_comparison.csv"))
-display(Image("artifacts/results/comparison/metrics_comparison.png"))
+comparison_dir = "artifacts/experiments/fastconformer_pc/results/comparison"
+display(pd.read_csv(f"{comparison_dir}/metrics_comparison.csv"))
+display(Image(f"{comparison_dir}/metrics_comparison.png"))
 """),
         code("""print("Performance by reciter")
-display(pd.read_csv("artifacts/results/comparison/metrics_by_reciter.csv"))
+display(pd.read_csv(f"{comparison_dir}/metrics_by_reciter.csv"))
 print("Performance by duration")
-display(pd.read_csv("artifacts/results/comparison/metrics_by_duration.csv"))
+display(pd.read_csv(f"{comparison_dir}/metrics_by_duration.csv"))
 print("Representative predictions")
-display(pd.read_csv("artifacts/results/comparison/prediction_examples.csv").head(12))
+display(pd.read_csv(f"{comparison_dir}/prediction_examples.csv").head(12))
 """),
     ])
 
